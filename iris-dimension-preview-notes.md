@@ -117,15 +117,28 @@ export 시 이 구조를 따라야 Iris가 받아들임 (Gson: Java 필드명 = 
 - **IrisGenerator**: `zoom`, `opacity`, `interpolator`, `composite`(IrisNoiseGenerator 리스트),
   `cliffHeightMin/Max`, `cliffHeightGenerator`, `cellFractureZoom/Shuffle/Height`, `cellPercentSize`, `multiplicitive`, `offsetX/Z`, `seed`
 
-올바른 최소 export 예:
+### 계산 규칙 (getHeight/getNoise, 소스 확정) — "게임에서 더 평평" 원인
+- `IrisNoiseGenerator.getNoise`: `n = CNG.fitDouble(0, opacity_noisegen=1, x/zoom, z/zoom)` → 0..1,
+  이어서 `n = pow(n, exponent)`
+- `IrisGenerator.getHeight`: `v = (n / tp) * generator.opacity`  (tp = noisegen.opacity, 기본 1)
+  → 최종 높이 = `pow(noise01, exponent) * opacity`
+- **좌표는 zoom으로 3번 나뉜다**: `generator.zoom × noisegen.zoom × style.zoom` (모두 곱해짐)
+
+⚠️ **초기 버그**: export가 zoom을 세 레벨 전부에 넣어 실효 zoom이 2³=8배 → 파장 8배 → 게임에서
+훨씬 평평. exponent도 noisegen+style 이중 적용. **수정**: zoom은 `generator.zoom` 한 곳,
+exponent는 `composite[].exponent` 한 곳만. style은 이름만(zoom/exponent=기본 1).
+
+올바른 최소 export 예 (수정본):
 ```json
 {
   "zoom": 2, "opacity": 24,
   "interpolator": { "function": "BILINEAR_STARCAST_6", "horizontalScale": 7 },
   "composite": [
-    { "zoom": 2, "octaves": 4, "exponent": 1,
-      "style": { "style": "FRACTAL_RM_SIMPLEX", "zoom": 2, "exponent": 1,
-                 "fracture": { "style": "SIMPLEX", "zoom": 2, "multiplier": 12 } } }
+    { "octaves": 4, "exponent": 1,
+      "style": { "style": "FRACTAL_RM_SIMPLEX",
+                 "fracture": { "style": "SIMPLEX", "multiplier": 12 } } }
   ]
 }
 ```
+(잔여 보정: CNG FBM의 옥타브 gain/기본 주파수가 FastNoiseLite와 미세하게 달라 절대 스케일은
+2차적으로 다를 수 있음. 필요 시 CNG 기본 주파수 확인해 미리보기 `0.06` 상수 보정.)

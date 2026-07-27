@@ -641,16 +641,24 @@
       const height   = parseInt(document.getElementById('height').value, 10);
       const fracture = parseFloat(document.getElementById('fracture').value);
 
-      const styleObj = { style, zoom, exponent };                // IrisGeneratorStyle
+      // IrisGeneratorStyle: only the NoiseStyle name. Its own zoom/exponent stay at
+      // the default 1 — Iris divides coords by generator.zoom * noisegen.zoom *
+      // style.zoom, so duplicating zoom here would make in-game terrain far flatter
+      // (features many times larger) than the preview.
+      const styleObj = { style };
       if (fracture > 0) {
-        styleObj.fracture = { style: 'SIMPLEX', zoom, multiplier: fracture }; // domain warp
+        styleObj.fracture = { style: 'SIMPLEX', multiplier: fracture }; // domain warp
       }
 
-      const noiseGen = { zoom, octaves, exponent, style: styleObj }; // IrisNoiseGenerator
+      // IrisNoiseGenerator: exponent applied here once (matches preview
+      // pow(noise, exponent)); zoom left at 1 so it doesn't multiply.
+      const noiseGen = { octaves, exponent, style: styleObj };
 
-      const generator = {                                        // IrisGenerator (top level)
+      // IrisGenerator: the single zoom lever + opacity (= max height).
+      // Iris height = (noise01 ^ exponent) * opacity, matching the preview.
+      const generator = {
         zoom,
-        opacity: height,                                         // max height contribution
+        opacity: height,
         interpolator: { function: 'BILINEAR_STARCAST_6', horizontalScale: 7 },
         composite: [noiseGen],
       };

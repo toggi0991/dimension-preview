@@ -176,4 +176,15 @@ FastNoiseLite FBm vs Iris식 클래식-심플렉스 FBM(옥타브4·gain0.5·lac
 - sd 0.167 vs **0.134**, p99 0.842 vs 0.782, 0.8초과 3% vs **0.6%**
 - → **Iris FBM이 더 좁음(높은 봉우리 드묾)**. 미리보기를 `FBM_AMP_MATCH=0.8`로 0.5 중심 좁혀 일치.
 - ⚠️ **핵심 결론**: 스케일·진폭 **둘 다 Iris ≤ 미리보기**(더 완만/낮음). 사용자가 본 "게임이 더 높게 쏫음"은
-  base 노이즈가 아님. 유력 원인: **fracture(도메인 워핑) 또는 스케일 보정 前 옛 빌드**. 현 빌드로 재확인 필요.
+  base 노이즈가 아님.
+
+## 7. 진짜 원인 = opacity 배율 오류 (실제 팩 파일에서 확정, 2026-07-27)
+사용자 팩 `Z:\...\Iris\packs\simple` 직접 확인. 높이 파이프라인:
+- 바이옴이 생성기를 `{generator, min, max}`로 연결 (plains 1~5, hills 8~24, ocean -20~-6).
+- **`IrisBiomeGeneratorLink.getHeight`**: `g = generator.getHeight(...); g = clamp(g, 0, 1); return lerp(min, max, g);`
+  → **생성기 출력을 [0,1]로 clamp 후** 바이옴 min/max로 lerp.
+- 그런데 `IrisGenerator.getHeight = noise × opacity`. **opacity=23이면 출력 0~23 → clamp에서 noise>0.043은 전부 1로 포화**
+  → `lerp(min,max,1)=max` → 지형이 거의 전부 바이옴 최대높이에 붙음 = **"높게 쏫는 지형이 자주"의 진짜 원인**.
+- **우리 툴 버그**: export가 `opacity: Height슬라이더값`(23,31)을 냈음 → 포화 유발.
+- **수정**: export **`opacity: 1` 고정**. 실제 높이는 바이옴 min/max 소관. (Height 슬라이더는 미리보기 전용.)
+- ✅ 이게 스케일/진폭보다 상위 원인. 스케일·진폭 보정도 유효하지만 이 opacity가 진짜 범인이었음.

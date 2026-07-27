@@ -204,7 +204,7 @@
         <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
       </div>
       <div class="modal-body">
-        <p class="cap">현재 선택값으로 만든 Iris generator JSON입니다. (a starting point for an Iris pack)</p>
+        <p class="cap">현재 선택값으로 만든 Iris generator JSON입니다. opacity는 1 고정(출력을 0~1로 유지) — 실제 높이는 각 바이옴의 min/max가 결정합니다.</p>
         <div class="code-wrap">
           <button type="button" class="code-copy" id="copyBtn">복사 (Copy)</button>
           <pre><code id="exportCode"></code></pre>
@@ -662,7 +662,6 @@
       const zoom     = parseFloat(document.getElementById('zoom').value);
       const octaves  = parseInt(document.getElementById('octaves').value, 10);
       const exponent = parseFloat(document.getElementById('exponent').value);
-      const height   = parseInt(document.getElementById('height').value, 10);
       const fracture = parseFloat(document.getElementById('fracture').value);
 
       // IrisGeneratorStyle: only the NoiseStyle name. Its own zoom/exponent stay at
@@ -678,11 +677,13 @@
       // pow(noise, exponent)); zoom left at 1 so it doesn't multiply.
       const noiseGen = { octaves, exponent, style: styleObj };
 
-      // IrisGenerator: opacity (= max height) + zoom. The preview frequency is already
-      // scale-matched to Iris per noise type (see TYPE_SCALE), so the slider IS gen.zoom.
+      // IrisGenerator. opacity MUST be ~1: IrisBiomeGeneratorLink clamps the generator's
+      // height output to [0,1] before lerping it into the biome's min/max. opacity > 1
+      // (e.g. the render height) saturates that clamp so terrain pins to the biome max
+      // almost everywhere. Actual height range is set by each biome's min/max, not here.
       const generator = {
         zoom,
-        opacity: height,
+        opacity: 1,
         interpolator: { function: 'BILINEAR_STARCAST_6', horizontalScale: 7 },
         composite: [noiseGen],
       };

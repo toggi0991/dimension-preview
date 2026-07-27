@@ -159,3 +159,11 @@ exponent는 `composite[].exponent` 한 곳만. style은 이름만(zoom/exponent=
     export gen.zoom = 슬라이더 그대로(K=1). (이전 K=2 추정은 오답이라 폐기.)
 - ⚠️ **함의**: 스케일 차이는 겨우 13%(그것도 Iris가 더 완만) → 게임에서 "뾰족/높음"은
   **zoom이 아니라 진폭/프랙탈 옥타브 문제**일 가능성. 다음에 FBM 진폭 분포 비교 필요.
+
+### 타입별 스케일 실측 (2026-07-27) — 배율은 타입마다 다름!
+FastNoiseLite 각 타입 파장(주파수 0.01): OpenSimplex2 137.7 / Perlin 194.6(×1.41) /
+ValueCubic 382.5(×2.78) / Value 398.7(×2.90) / Cellular 측정불가(셀값). 클래식 Simplex(Iris) 155.4.
+- **한 배율(0.886)을 전 타입에 적용하면 SIMPLEX만 맞고 나머지는 틀림** → 타입별 배율로 수정:
+  - `OpenSimplex2`(SIMPLEX/IRIS/NOWHERE류) → **0.886** (Iris 등가물 실측, 정확)
+  - Perlin/Cellular/ValueCubic/Value → **1.0** (근사: FNL≈옛 FastNoise 같은 알고리즘 가정)
+- ⚠️ 비-SIMPLEX 타입은 Iris 옛 FastNoise를 CDN에서 못 불러와 **정확 실측 미완**. 게임 확인 필요.

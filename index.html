@@ -514,7 +514,11 @@
       // Iris samples via FastNoiseDouble at its DEFAULT frequency 0.01 (no SetFrequency),
       // then divides coords by gen.zoom. Match that base so the exported gen.zoom (= this
       // slider) yields the same feature scale in-game as the preview.
-      n.SetFrequency(IRIS_BASE_FREQ * OPENSIMPLEX2_SCALE / zoom * cfg.freqMul); // matches Iris scale
+      // Scale factor is per-type: OpenSimplex2 needs 0.886 to match Iris's classic
+      // simplex (measured). Perlin/Cellular/ValueCubic/Value share the algorithm with
+      // Iris's old FastNoise, so ~1.0 (couldn't load old FastNoise to measure exactly).
+      const typeScale = cfg.type === 'OpenSimplex2' ? OPENSIMPLEX2_SCALE : 1;
+      n.SetFrequency(IRIS_BASE_FREQ * typeScale / zoom * cfg.freqMul);
       n.SetFractalType(FastNoiseLite.FractalType[cfg.fractal]);
       if (cfg.fractal !== 'None') n.SetFractalOctaves(octaves);
 

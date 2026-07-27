@@ -227,6 +227,14 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import FastNoiseLite from 'fastnoise-lite'; // MIT — same noise core Iris uses internally
 
+    // Scale calibration (measured, not guessed): Iris samples its classic FastNoise
+    // Simplex at default frequency 0.01. OpenSimplex2 (FastNoiseLite) has a slightly
+    // SMALLER feature scale than classic simplex — measured wavelength ratio
+    // OpenSimplex2 / classic ≈ 0.886 at the same frequency. So to make the preview's
+    // feature size exactly match Iris at gen.zoom == slider, lower our frequency by it.
+    const IRIS_BASE_FREQ = 0.01;        // Iris FastNoise m_frequency default
+    const OPENSIMPLEX2_SCALE = 0.886;   // measured OpenSimplex2÷classic-simplex wavelength ratio
+
     // Placeholder block colors — swap for real textures later.
     const BLOCK_COLORS = {
       grass:      { top: 0x6aab3c, side: 0x8a6d43 },
@@ -506,14 +514,14 @@
       // Iris samples via FastNoiseDouble at its DEFAULT frequency 0.01 (no SetFrequency),
       // then divides coords by gen.zoom. Match that base so the exported gen.zoom (= this
       // slider) yields the same feature scale in-game as the preview.
-      n.SetFrequency(0.01 / zoom * cfg.freqMul);   // higher zoom -> bigger features
+      n.SetFrequency(IRIS_BASE_FREQ * OPENSIMPLEX2_SCALE / zoom * cfg.freqMul); // matches Iris scale
       n.SetFractalType(FastNoiseLite.FractalType[cfg.fractal]);
       if (cfg.fractal !== 'None') n.SetFractalOctaves(octaves);
 
       // Iris "fracture" = warp input coords with a second noise (our own domain warp).
       const warp = new FastNoiseLite(9001);
       warp.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
-      warp.SetFrequency(0.01 / zoom);
+      warp.SetFrequency(IRIS_BASE_FREQ * OPENSIMPLEX2_SCALE / zoom);
 
       return (x, z) => {
         let sx = x, sz = z;
@@ -632,11 +640,6 @@
       scene.traverse(o => { if (o.material) o.material.needsUpdate = true; });
     }
 
-    // Empirical zoom calibration: Iris's Simplex reads ~2x higher frequency than
-    // FastNoiseLite at the same zoom, so exported gen.zoom = slider * this. Tune with
-    // in-game feedback (raise if terrain is still too spiky, lower if too flat).
-    const IRIS_ZOOM_CAL = 2;
-
     // Build a schema-correct Iris generator JSON from the committed selections.
     // Field names/nesting mirror Iris: IrisGenerator -> composite[IrisNoiseGenerator]
     // where `style` is an IrisGeneratorStyle OBJECT (not a bare string), and domain
@@ -662,11 +665,10 @@
       // pow(noise, exponent)); zoom left at 1 so it doesn't multiply.
       const noiseGen = { octaves, exponent, style: styleObj };
 
-      // IrisGenerator: opacity (= max height) + zoom. Iris's Simplex runs ~2x higher
-      // frequency than FastNoiseLite at the same zoom (different simplex impls), so we
-      // scale the exported gen.zoom up to keep in-game terrain as smooth as the preview.
+      // IrisGenerator: opacity (= max height) + zoom. The preview frequency is already
+      // scale-matched to Iris (see OPENSIMPLEX2_SCALE), so the slider IS gen.zoom.
       const generator = {
-        zoom: +(zoom * IRIS_ZOOM_CAL).toFixed(3),
+        zoom,
         opacity: height,
         interpolator: { function: 'BILINEAR_STARCAST_6', horizontalScale: 7 },
         composite: [noiseGen],

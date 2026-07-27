@@ -151,5 +151,11 @@ exponent는 `composite[].exponent` 한 곳만. style은 이름만(zoom/exponent=
 - 미리보기가 `0.06`을 써서 Iris보다 **약 6배 촘촘** → Iris가 6배 평평해 보였음.
 - **수정**: 미리보기 주파수를 `0.01 / zoom`으로 (Iris와 동일), 슬라이더 zoom = 그대로 `gen.zoom`으로 export.
   → 슬라이더 값이 곧 Iris gen.zoom, 스케일 일치. 기본값 zoom 0.5 / size 64로 조정.
-- 잔여 오차: FastNoiseLite(OpenSimplex2) vs Iris FastNoise(SingleSimplex)의 심플렉스 주기가
-  구현상 ~1.x배 다를 수 있음(6배 → ~1.x배로 축소). 게임 확인 후 필요 시 상수 미세조정.
+- **스케일 배율 실측(역산, 2026-07-27)**: Iris `SingleSimplex` = 표준 Perlin 심플렉스
+  = MIT `simplex-noise`와 동일 격자. 브라우저에서 두 노이즈 파장 측정(주파수 0.01):
+  - OpenSimplex2(FastNoiseLite, 미리보기): 파장 **137.7**
+  - 클래식 Simplex(=Iris): 파장 **155.4**
+  - **정확 배율 = 137.7/155.4 = 0.886** → 미리보기 주파수를 `0.01×0.886/zoom`로 낮춰 스케일 일치.
+    export gen.zoom = 슬라이더 그대로(K=1). (이전 K=2 추정은 오답이라 폐기.)
+- ⚠️ **함의**: 스케일 차이는 겨우 13%(그것도 Iris가 더 완만) → 게임에서 "뾰족/높음"은
+  **zoom이 아니라 진폭/프랙탈 옥타브 문제**일 가능성. 다음에 FBM 진폭 분포 비교 필요.

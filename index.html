@@ -147,10 +147,35 @@
     const ambient = new THREE.AmbientLight(0xffffff, 0.4);
     scene.add(ambient);
 
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    let blocks = null;              // THREE.InstancedMesh, rebuilt on change
-    const dummy = new THREE.Matrix4();
+    let blocks = null;              // THREE.Mesh (merged, face-culled), rebuilt on change
     let curSize = 16;               // render-area edge length (blocks), from #size
+
+    // Unit-cube faces: outward dir, 4 corner offsets (any rectangular loop order —
+    // winding is fixed at emit time), and which palette color the face uses.
+    const FACES = [
+      { dir:[ 1, 0, 0], color:'side', corners:[[ .5,-.5,-.5],[ .5, .5,-.5],[ .5, .5, .5],[ .5,-.5, .5]] },
+      { dir:[-1, 0, 0], color:'side', corners:[[-.5,-.5,-.5],[-.5, .5,-.5],[-.5, .5, .5],[-.5,-.5, .5]] },
+      { dir:[ 0, 1, 0], color:'top',  corners:[[-.5, .5,-.5],[ .5, .5,-.5],[ .5, .5, .5],[-.5, .5, .5]] },
+      { dir:[ 0,-1, 0], color:'side', corners:[[-.5,-.5,-.5],[ .5,-.5,-.5],[ .5,-.5, .5],[-.5,-.5, .5]] },
+      { dir:[ 0, 0, 1], color:'side', corners:[[-.5,-.5, .5],[ .5,-.5, .5],[ .5, .5, .5],[-.5, .5, .5]] },
+      { dir:[ 0, 0,-1], color:'side', corners:[[-.5,-.5,-.5],[ .5,-.5,-.5],[ .5, .5,-.5],[-.5, .5,-.5]] },
+    ];
+
+    // Append one exposed face (2 triangles) to the geometry buffers, winding the
+    // triangles so their front side faces outward along the face normal.
+    function emitFace(cx, cy, cz, f, col, P, N, C) {
+      const [nx, ny, nz] = f.dir;
+      const q = f.corners.map(o => [cx + o[0], cy + o[1], cz + o[2]]);
+      const ax=q[1][0]-q[0][0], ay=q[1][1]-q[0][1], az=q[1][2]-q[0][2];
+      const bx=q[2][0]-q[0][0], by=q[2][1]-q[0][1], bz=q[2][2]-q[0][2];
+      const flip = ((ay*bz-az*by)*nx + (az*bx-ax*bz)*ny + (ax*by-ay*bx)*nz) < 0;
+      const tris = flip ? [0,2,1, 0,3,2] : [0,1,2, 0,2,3];
+      for (const idx of tris) {
+        P.push(q[idx][0], q[idx][1], q[idx][2]);
+        N.push(nx, ny, nz);
+        C.push(col.r, col.g, col.b);
+      }
+    }
 
     function heightAt(x, z, terrain) {
       if (terrain === 'flat') return 0;
@@ -160,10 +185,10 @@
     }
 
     function rebuild() {
-      // dispose the previous instanced mesh (geometry `geo` is shared, keep it)
+      // dispose the previous mesh (geometry + material)
       if (blocks) {
         scene.remove(blocks);
-        blocks.dispose();
+        blocks.geometry.dispose();
         (Array.isArray(blocks.material) ? blocks.material : [blocks.material])
           .forEach(m => m.dispose());
       }
@@ -171,29 +196,43 @@
       const terrain = document.getElementById('terrain').value;
       curSize = parseInt(document.getElementById('size').value, 10);
       const c = BLOCK_COLORS[kind];
-      const topMat = new THREE.MeshStandardMaterial({ color: c.top });
-      const sideMat = new THREE.MeshStandardMaterial({ color: c.side });
-      const mats = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
+      const topCol = new THREE.Color(c.top);
+      const sideCol = new THREE.Color(c.side);
 
-      // collect all block positions first so we know the instance count
       const half = curSize / 2;
-      const positions = [];
+      // A cell is solid if it's within the world box and at/below its column height.
+      // Anything below y=0 or outside the x/z box counts as air, so the world's
+      // bottom and outer walls stay visible.
+      const solid = (x, y, z) => {
+        if (y < 0) return false;
+        if (x < -half || x >= half || z < -half || z >= half) return false;
+        return y <= heightAt(x, z, terrain);
+      };
+
+      // Build ONE merged geometry holding only air-exposed faces (hidden faces culled).
+      const P = [], N = [], C = [];
+      let blockCount = 0, faceCount = 0;
       for (let x = -half; x < half; x++) {
         for (let z = -half; z < half; z++) {
           const h = heightAt(x, z, terrain);
-          for (let y = 0; y <= h; y++) positions.push([x + 0.5, y + 0.5, z + 0.5]);
+          for (let y = 0; y <= h; y++) {
+            blockCount++;
+            for (const f of FACES) {
+              if (solid(x + f.dir[0], y + f.dir[1], z + f.dir[2])) continue; // neighbour blocks it
+              emitFace(x + 0.5, y + 0.5, z + 0.5, f, f.color === 'top' ? topCol : sideCol, P, N, C);
+              faceCount++;
+            }
+          }
         }
       }
 
-      // one InstancedMesh draws every block in a few draw calls, regardless of count
-      blocks = new THREE.InstancedMesh(geo, mats, positions.length);
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(P, 3));
+      g.setAttribute('normal',   new THREE.Float32BufferAttribute(N, 3));
+      g.setAttribute('color',    new THREE.Float32BufferAttribute(C, 3));
+      blocks = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ vertexColors: true }));
       blocks.castShadow = true;
       blocks.receiveShadow = true;
-      for (let i = 0; i < positions.length; i++) {
-        dummy.makeTranslation(positions[i][0], positions[i][1], positions[i][2]);
-        blocks.setMatrixAt(i, dummy);
-      }
-      blocks.instanceMatrix.needsUpdate = true;
       scene.add(blocks);
 
       // grow the shadow frustum with the world so shadows aren't clipped
@@ -205,7 +244,7 @@
       // readouts
       document.getElementById('sizeval').textContent = curSize + '×' + curSize;
       document.getElementById('blockcount').textContent =
-        positions.length.toLocaleString() + ' blocks';
+        blockCount.toLocaleString() + ' blocks · ' + faceCount.toLocaleString() + ' faces';
     }
 
     function applyTime() {

@@ -9,13 +9,16 @@ shader-style looks (shadows, lighting, tone mapping) are approximated in the bro
 ## Status
 Early scaffold. Blocks are rendered with placeholder colors; real textures TBD.
 
+## Live demo
+https://toggi0991.github.io/dimension-preview/
+
 ## Files
-- `dimension-preview.html` — single-file app (form panel + Three.js 3D canvas)
+- `index.html` — single-file app (form panel + Three.js 3D canvas)
 - `iris-dimension-preview-notes.md` — research & direction notes (incl. usage-policy findings)
 
 ## Run
-Open `dimension-preview.html` in a browser. Requires an internet connection
-(Three.js is loaded from a CDN via importmap).
+Open `index.html` in a browser, or visit the live demo above. Requires an internet
+connection (Three.js is loaded from a CDN via importmap).
 
 ## Notes
 This is an unofficial fan project. "Minecraft" is used only in a secondary,

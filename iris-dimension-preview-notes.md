@@ -140,5 +140,13 @@ exponent는 `composite[].exponent` 한 곳만. style은 이름만(zoom/exponent=
   ]
 }
 ```
-(잔여 보정: CNG FBM의 옥타브 gain/기본 주파수가 FastNoiseLite와 미세하게 달라 절대 스케일은
-2차적으로 다를 수 있음. 필요 시 CNG 기본 주파수 확인해 미리보기 `0.06` 상수 보정.)
+### 절대 스케일 보정 (기저 주파수 확정, 2026-07-27)
+- Iris 노이즈 체인: `SimplexNoise`/`FractalFBMSimplexNoise` 등 → `new FastNoiseDouble(seed)`,
+  **SetFrequency 호출 없음** → `m_frequency` = **기본 0.01**.
+  `GetSimplex(x,z) = SingleSimplex(seed, x*0.01, z*0.01)`. 좌표는 그 전에 `/gen.zoom`.
+- 즉 **Iris 실효 주파수 = 0.01 / gen.zoom**.
+- 미리보기가 `0.06`을 써서 Iris보다 **약 6배 촘촘** → Iris가 6배 평평해 보였음.
+- **수정**: 미리보기 주파수를 `0.01 / zoom`으로 (Iris와 동일), 슬라이더 zoom = 그대로 `gen.zoom`으로 export.
+  → 슬라이더 값이 곧 Iris gen.zoom, 스케일 일치. 기본값 zoom 0.5 / size 64로 조정.
+- 잔여 오차: FastNoiseLite(OpenSimplex2) vs Iris FastNoise(SingleSimplex)의 심플렉스 주기가
+  구현상 ~1.x배 다를 수 있음(6배 → ~1.x배로 축소). 게임 확인 후 필요 시 상수 미세조정.

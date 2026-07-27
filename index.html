@@ -151,8 +151,8 @@
     </div>
 
     <div class="field">
-      <label for="zoom">지형 스케일 (Zoom) <span class="rangeval" id="zoomval">2.0</span></label>
-      <input type="range" id="zoom" min="0.5" max="8" step="0.5" value="2" />
+      <label for="zoom">지형 스케일 (Zoom = Iris gen.zoom) <span class="rangeval" id="zoomval">0.50</span></label>
+      <input type="range" id="zoom" min="0.25" max="8" step="0.25" value="0.5" />
     </div>
 
     <div class="field">
@@ -171,8 +171,8 @@
     </div>
 
     <div class="field">
-      <label for="size">렌더 영역 (Size) <span class="rangeval" id="sizeval">48×48</span></label>
-      <input type="range" id="size" min="8" max="128" step="8" value="48" />
+      <label for="size">렌더 영역 (Size) <span class="rangeval" id="sizeval">64×64</span></label>
+      <input type="range" id="size" min="8" max="128" step="8" value="64" />
       <div class="count" id="blockcount">— blocks</div>
     </div>
 
@@ -503,14 +503,17 @@
 
       const n = new FastNoiseLite(1337);
       n.SetNoiseType(FastNoiseLite.NoiseType[cfg.type]);
-      n.SetFrequency(0.06 / zoom * cfg.freqMul);   // higher zoom -> bigger features
+      // Iris samples via FastNoiseDouble at its DEFAULT frequency 0.01 (no SetFrequency),
+      // then divides coords by gen.zoom. Match that base so the exported gen.zoom (= this
+      // slider) yields the same feature scale in-game as the preview.
+      n.SetFrequency(0.01 / zoom * cfg.freqMul);   // higher zoom -> bigger features
       n.SetFractalType(FastNoiseLite.FractalType[cfg.fractal]);
       if (cfg.fractal !== 'None') n.SetFractalOctaves(octaves);
 
       // Iris "fracture" = warp input coords with a second noise (our own domain warp).
       const warp = new FastNoiseLite(9001);
       warp.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
-      warp.SetFrequency(0.05 / zoom);
+      warp.SetFrequency(0.01 / zoom);
 
       return (x, z) => {
         let sx = x, sz = z;
@@ -690,7 +693,7 @@
     const RANGE_LABELS = {
       size:     v => v + '×' + v,
       height:   v => v,
-      zoom:     v => parseFloat(v).toFixed(1),
+      zoom:     v => parseFloat(v).toFixed(2),
       octaves:  v => v,
       exponent: v => parseFloat(v).toFixed(1),
       fracture: v => v,

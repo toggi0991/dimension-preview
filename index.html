@@ -69,15 +69,8 @@
     </div>
 
     <div class="field">
-      <label for="noise">지형 노이즈 (Terrain)</label>
-      <select id="noise">
-        <option value="flat">Flat</option>
-        <option value="simplex" selected>Simplex FBM (rolling)</option>
-        <option value="perlin">Perlin FBM</option>
-        <option value="ridged">Ridged (mountains)</option>
-        <option value="billow">Billow (rounded)</option>
-        <option value="cellular">Cellular (plateaus)</option>
-      </select>
+      <label for="noise">지형 노이즈 (Terrain · Iris NoiseStyle)</label>
+      <select id="noise"><!-- populated with all Iris styles by populateStyles() --></select>
     </div>
 
     <div class="field">
@@ -92,7 +85,7 @@
 
     <div class="field">
       <label for="octaves">옥타브 (Octaves) <span class="rangeval" id="octavesval">4</span></label>
-      <input type="range" id="octaves" min="1" max="8" step="1" value="4" />
+      <input type="range" id="octaves" min="1" max="20" step="1" value="4" />
     </div>
 
     <div class="field">
@@ -223,21 +216,130 @@
       }
     }
 
-    // Iris-style noise styles mapped onto FastNoiseLite (the same core Iris uses).
-    const NOISE_STYLES = {
-      simplex:  { type: 'OpenSimplex2', fractal: 'FBm' },
-      perlin:   { type: 'Perlin',       fractal: 'FBm' },
-      ridged:   { type: 'OpenSimplex2', fractal: 'Ridged' },          // sharp mountain ridges
-      billow:   { type: 'OpenSimplex2', fractal: 'FBm', billow: true }, // rounded, puffy
-      cellular: { type: 'Cellular',     fractal: 'None' },            // Voronoi plateaus
-    };
+    // Every Iris NoiseStyle enum constant (from VolmitSoftware/Iris NoiseStyle.java).
+    // These exact names are what an exported Iris pack's JSON expects.
+    const IRIS_STYLES = [
+      'STATIC','STATIC_BILINEAR','STATIC_BICUBIC','STATIC_HERMITE',
+      'IRIS','CLOVER','CLOVER_STARCAST_3','CLOVER_STARCAST_6','CLOVER_STARCAST_9','CLOVER_STARCAST_12',
+      'CLOVER_BILINEAR_STARCAST_3','CLOVER_BILINEAR_STARCAST_6','CLOVER_BILINEAR_STARCAST_9','CLOVER_BILINEAR_STARCAST_12',
+      'CLOVER_HERMITE_STARCAST_3','CLOVER_HERMITE_STARCAST_6','CLOVER_HERMITE_STARCAST_9','CLOVER_HERMITE_STARCAST_12',
+      'CLOVER_BILINEAR','CLOVER_BICUBIC','CLOVER_HERMITE','VASCULAR','FLAT','CELLULAR',
+      'CELLULAR_STARCAST_3','CELLULAR_STARCAST_6','CELLULAR_STARCAST_9','CELLULAR_STARCAST_12',
+      'CELLULAR_BILINEAR_STARCAST_3','CELLULAR_BILINEAR_STARCAST_6','CELLULAR_BILINEAR_STARCAST_9','CELLULAR_BILINEAR_STARCAST_12',
+      'CELLULAR_HERMITE_STARCAST_3','CELLULAR_HERMITE_STARCAST_6','CELLULAR_HERMITE_STARCAST_9','CELLULAR_HERMITE_STARCAST_12',
+      'CELLULAR_BILINEAR','CELLULAR_BICUBIC','CELLULAR_HERMITE',
+      'NOWHERE','NOWHERE_CELLULAR','NOWHERE_CLOVER','NOWHERE_SIMPLEX','NOWHERE_GLOB','NOWHERE_VASCULAR',
+      'NOWHERE_CUBIC','NOWHERE_SUPERFRACTAL','NOWHERE_FRACTAL',
+      'IRIS_DOUBLE','IRIS_THICK','IRIS_HALF','SIMPLEX','FRACTAL_SMOKE','VASCULAR_THIN','SIMPLEX_CELLS',
+      'SIMPLEX_VASCULAR','FRACTAL_WATER','PERLIN','PERLIN_IRIS','PERLIN_IRIS_HALF','PERLIN_IRIS_DOUBLE','PERLIN_IRIS_THICK',
+      'FRACTAL_BILLOW_PERLIN','BIOCTAVE_FRACTAL_BILLOW_PERLIN','FRACTAL_BILLOW_SIMPLEX','FRACTAL_FBM_SIMPLEX',
+      'FRACTAL_BILLOW_IRIS','FRACTAL_FBM_IRIS','FRACTAL_BILLOW_IRIS_HALF','FRACTAL_FBM_IRIS_HALF',
+      'FRACTAL_BILLOW_IRIS_THICK','FRACTAL_FBM_IRIS_THICK','FRACTAL_RM_SIMPLEX',
+      'BIOCTAVE_FRACTAL_BILLOW_SIMPLEX','BIOCTAVE_FRACTAL_FBM_SIMPLEX','BIOCTAVE_FRACTAL_RM_SIMPLEX',
+      'TRIOCTAVE_FRACTAL_RM_SIMPLEX','TRIOCTAVE_FRACTAL_BILLOW_SIMPLEX','TRIOCTAVE_FRACTAL_FBM_SIMPLEX',
+      'QUADOCTAVE_FRACTAL_RM_SIMPLEX','QUADOCTAVE_FRACTAL_BILLOW_SIMPLEX','QUADOCTAVE_FRACTAL_FBM_SIMPLEX',
+      'QUINTOCTAVE_FRACTAL_RM_SIMPLEX','QUINTOCTAVE_FRACTAL_BILLOW_SIMPLEX','QUINTOCTAVE_FRACTAL_FBM_SIMPLEX',
+      'SEXOCTAVE_FRACTAL_RM_SIMPLEX','SEXOCTAVE_FRACTAL_BILLOW_SIMPLEX','SEXOCTAVE_FRACTAL_FBM_SIMPLEX',
+      'SEPTOCTAVE_FRACTAL_RM_SIMPLEX','SEPTOCTAVE_FRACTAL_BILLOW_SIMPLEX','SEPTOCTAVE_FRACTAL_FBM_SIMPLEX',
+      'OCTOCTAVE_FRACTAL_RM_SIMPLEX','OCTOCTAVE_FRACTAL_BILLOW_SIMPLEX','OCTOCTAVE_FRACTAL_FBM_SIMPLEX',
+      'NONOCTAVE_FRACTAL_RM_SIMPLEX','NONOCTAVE_FRACTAL_BILLOW_SIMPLEX','NONOCTAVE_FRACTAL_FBM_SIMPLEX',
+      'VIGOCTAVE_FRACTAL_RM_SIMPLEX','VIGOCTAVE_FRACTAL_BILLOW_SIMPLEX','VIGOCTAVE_FRACTAL_FBM_SIMPLEX',
+      'BIOCTAVE_SIMPLEX','TRIOCTAVE_SIMPLEX','QUADOCTAVE_SIMPLEX','QUINTOCTAVE_SIMPLEX','SEXOCTAVE_SIMPLEX',
+      'SEPTOCTAVE_SIMPLEX','OCTOCTAVE_SIMPLEX','NONOCTAVE_SIMPLEX','VIGOCTAVE_SIMPLEX',
+      'GLOB','GLOB_IRIS','GLOB_IRIS_HALF','GLOB_IRIS_DOUBLE','GLOB_IRIS_THICK',
+      'CUBIC','FRACTAL_CUBIC','FRACTAL_CUBIC_IRIS','FRACTAL_CUBIC_IRIS_THICK','FRACTAL_CUBIC_IRIS_HALF','FRACTAL_CUBIC_IRIS_DOUBLE',
+      'BIOCTAVE_FRACTAL_CUBIC','TRIOCTAVE_FRACTAL_CUBIC','QUADOCTAVE_FRACTAL_CUBIC',
+      'CUBIC_IRIS','CUBIC_IRIS_HALF','CUBIC_IRIS_DOUBLE','CUBIC_IRIS_THICK',
+      'CELLULAR_IRIS','CELLULAR_IRIS_THICK','CELLULAR_IRIS_DOUBLE','CELLULAR_IRIS_HALF',
+      'CELLULAR_HEIGHT','CELLULAR_HEIGHT_IRIS','CELLULAR_HEIGHT_IRIS_DOUBLE','CELLULAR_HEIGHT_IRIS_THICK','CELLULAR_HEIGHT_IRIS_HALF',
+      'VASCULAR_IRIS','VASCULAR_IRIS_DOUBLE','VASCULAR_IRIS_THICK','VASCULAR_IRIS_HALF',
+    ];
+
+    // Octave-count prefixes used in Iris style names.
+    const OCTAVE_PREFIX = { BIOCTAVE:2, TRIOCTAVE:3, QUADOCTAVE:4, QUINTOCTAVE:5, SEXOCTAVE:6,
+                            SEPTOCTAVE:7, OCTOCTAVE:8, NONOCTAVE:9, VIGOCTAVE:20 };
+
+    // Which UI group a style belongs to (for the grouped dropdown).
+    function familyOf(n) {
+      if (n === 'FLAT') return 'Flat';
+      if (n.startsWith('STATIC')) return 'Static';
+      if (n.startsWith('NOWHERE')) return 'Nowhere';
+      for (const p in OCTAVE_PREFIX) if (n.startsWith(p + '_')) return 'Octave-stacked';
+      if (n.includes('SIMPLEX')) return 'Simplex';
+      if (n.includes('PERLIN')) return 'Perlin';
+      if (n.includes('CELLULAR')) return 'Cellular';
+      if (n.includes('CUBIC')) return 'Cubic';
+      if (n.includes('GLOB')) return 'Glob';
+      if (n.includes('CLOVER')) return 'Clover';
+      if (n.includes('VASCULAR')) return 'Vascular';
+      if (n.includes('IRIS')) return 'Iris';
+      return 'Other';
+    }
+    const FAMILY_ORDER = ['Simplex','Perlin','Cellular','Cubic','Octave-stacked','Iris',
+                          'Glob','Clover','Vascular','Static','Nowhere','Flat','Other'];
+
+    // Convert an Iris NoiseStyle name into a FastNoiseLite config (an approximation;
+    // Iris-only generators GLOB/CLOVER/VASCULAR/IRIS/NOWHERE map to nearest FNL types).
+    function irisStyleToFNL(name) {
+      const cfg = { flat: false, type: 'OpenSimplex2', fractal: 'None', octaves: 1, billow: false, freqMul: 1 };
+      if (name === 'FLAT') { cfg.flat = true; return cfg; }
+      let s = name;
+
+      // octave prefix -> octave count (implies fractal layering)
+      for (const p in OCTAVE_PREFIX) if (s.startsWith(p + '_')) {
+        cfg.octaves = OCTAVE_PREFIX[p]; cfg.fractal = 'FBm'; s = s.slice(p.length + 1); break;
+      }
+      // density suffix -> feature-size multiplier
+      if (/_DOUBLE$/.test(s)) { cfg.freqMul = 0.5; s = s.replace(/_DOUBLE$/, ''); }
+      else if (/_THICK$/.test(s)) { cfg.freqMul = 0.7; s = s.replace(/_THICK$/, ''); }
+      else if (/_HALF$/.test(s)) { cfg.freqMul = 1.7; s = s.replace(/_HALF$/, ''); }
+      // interpolation baked into the name is irrelevant for continuous-noise preview
+      s = s.replace(/_STARCAST_\d+/g, '').replace(/_(BILINEAR|BICUBIC|HERMITE)/g, '');
+
+      // fractal token
+      if (s.includes('FRACTAL_BILLOW')) { cfg.fractal = 'FBm'; cfg.billow = true; if (cfg.octaves < 2) cfg.octaves = 4; }
+      else if (s.includes('FRACTAL_FBM')) { cfg.fractal = 'FBm'; if (cfg.octaves < 2) cfg.octaves = 4; }
+      else if (s.includes('FRACTAL_RM') || s.includes('FRACTAL_RIGID')) { cfg.fractal = 'Ridged'; if (cfg.octaves < 2) cfg.octaves = 4; }
+      else if (s.includes('FRACTAL_CUBIC')) { cfg.fractal = 'FBm'; cfg.type = 'ValueCubic'; if (cfg.octaves < 2) cfg.octaves = 4; }
+      else if (s.includes('SMOKE')) { cfg.fractal = 'FBm'; cfg.billow = true; cfg.octaves = 5; }
+      else if (s.includes('WATER')) { cfg.fractal = 'FBm'; cfg.octaves = 3; }
+      else if (s.includes('SUPERFRACTAL') || s.includes('FRACTAL')) { cfg.fractal = 'FBm'; if (cfg.octaves < 2) cfg.octaves = 6; }
+
+      // base generator (first match wins; Iris-only types approximated)
+      if (s.includes('SIMPLEX')) cfg.type = 'OpenSimplex2';
+      else if (s.includes('PERLIN')) cfg.type = 'Perlin';
+      else if (s.includes('CUBIC')) cfg.type = 'ValueCubic';
+      else if (s.includes('CELLULAR')) cfg.type = 'Cellular';
+      else if (s.includes('GLOB') || s.includes('CLOVER') || s.includes('VASCULAR')) cfg.type = 'Cellular';
+      else if (s.includes('STATIC')) { cfg.type = 'Value'; cfg.freqMul *= 8; }   // white-ish
+      else if (s.includes('NOWHERE') || s.includes('IRIS')) cfg.type = 'OpenSimplex2';
+      return cfg;
+    }
+
+    // Populate the style dropdown with every Iris style, grouped by family.
+    function populateStyles() {
+      const sel = document.getElementById('noise');
+      const groups = {};
+      IRIS_STYLES.forEach(n => (groups[familyOf(n)] ||= []).push(n));
+      FAMILY_ORDER.forEach(fam => {
+        if (!groups[fam]) return;
+        const og = document.createElement('optgroup');
+        og.label = fam + ' (' + groups[fam].length + ')';
+        groups[fam].forEach(n => {
+          const o = document.createElement('option');
+          o.value = n; o.textContent = n;
+          og.appendChild(o);
+        });
+        sel.appendChild(og);
+      });
+      sel.value = 'FRACTAL_FBM_SIMPLEX'; // sensible default (rolling hills)
+    }
 
     // Build a height function h(x,z) -> integer block height from the current controls.
-    // Mirrors Iris's per-noise params: zoom, octaves, exponent, and fracture (domain warp).
+    // Style -> base type/fractal/billow; sliders -> zoom/octaves/exponent/fracture/height.
     function buildHeightFn() {
-      const style = document.getElementById('noise').value;
-      const spec = NOISE_STYLES[style];
-      if (!spec) return () => 0; // flat
+      const cfg = irisStyleToFNL(document.getElementById('noise').value);
+      if (cfg.flat) return () => 0;
 
       const zoom     = parseFloat(document.getElementById('zoom').value);
       const octaves  = parseInt(document.getElementById('octaves').value, 10);
@@ -246,10 +348,10 @@
       const fracture = parseFloat(document.getElementById('fracture').value);
 
       const n = new FastNoiseLite(1337);
-      n.SetNoiseType(FastNoiseLite.NoiseType[spec.type]);
-      n.SetFrequency(0.06 / zoom);                 // higher zoom -> lower freq -> bigger features
-      n.SetFractalType(FastNoiseLite.FractalType[spec.fractal]);
-      if (spec.fractal !== 'None') n.SetFractalOctaves(octaves);
+      n.SetNoiseType(FastNoiseLite.NoiseType[cfg.type]);
+      n.SetFrequency(0.06 / zoom * cfg.freqMul);   // higher zoom -> bigger features
+      n.SetFractalType(FastNoiseLite.FractalType[cfg.fractal]);
+      if (cfg.fractal !== 'None') n.SetFractalOctaves(octaves);
 
       // Iris "fracture" = warp input coords with a second noise (our own domain warp).
       const warp = new FastNoiseLite(9001);
@@ -263,7 +365,7 @@
           sz += warp.GetNoise(x + 517.3, z - 231.7) * fracture;
         }
         let v = n.GetNoise(sx, sz) * 0.5 + 0.5;    // -1..1 -> 0..1
-        if (spec.billow) v = Math.abs(v * 2 - 1);  // rounded billow shape
+        if (cfg.billow) v = Math.abs(v * 2 - 1);   // rounded billow shape
         v = Math.pow(Math.max(0, v), exponent);    // >1 flatter lows, <1 favors peaks
         return Math.round(v * amp);
       };
@@ -388,8 +490,16 @@
         document.getElementById(id + 'val').textContent = RANGE_LABELS[id](el.value));
     });
     // Rebuild the world when any of these change (on release for range inputs)
-    ['block', 'noise', 'size', 'height', 'zoom', 'octaves', 'exponent', 'fracture'].forEach(id =>
+    ['block', 'size', 'height', 'zoom', 'octaves', 'exponent', 'fracture'].forEach(id =>
       document.getElementById(id).addEventListener('change', rebuild));
+    // Picking a style suggests its implied octave count, then rebuilds
+    document.getElementById('noise').addEventListener('change', () => {
+      const cfg = irisStyleToFNL(document.getElementById('noise').value);
+      const oct = document.getElementById('octaves');
+      oct.value = Math.min(+oct.max, Math.max(+oct.min, cfg.octaves));
+      document.getElementById('octavesval').textContent = oct.value;
+      rebuild();
+    });
     document.getElementById('time').addEventListener('input', applyTime);
     document.getElementById('shader').addEventListener('change', applyShader);
 
@@ -402,7 +512,7 @@
     window.addEventListener('resize', resize);
     new ResizeObserver(resize).observe(stage); // re-fit when the pane becomes visible
 
-    rebuild(); applyTime(); applyShader(); resize();
+    populateStyles(); rebuild(); applyTime(); applyShader(); resize();
     (function loop() {
       requestAnimationFrame(loop);
       controls.update();

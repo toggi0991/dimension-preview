@@ -55,3 +55,49 @@
 - [ ] "렌더 이미지 저장/내보내기"(PNG) 기능
 - [ ] CDN 대신 로컬 번들로 오프라인 동작 여부 결정
 - [ ] Commercial Use 가이드라인 원문 정독 후 수익화 가능 여부 확정
+- [ ] Iris 지형 함수(아래 5장) 중 핵심 서브셋을 JS 노이즈로 이식 → heightAt() 대체
+
+> ⚠️ **용어 정정**: 위 3장에서 "Iris 셰이더팩"이라 쓴 부분은 착오. 이 프로젝트가 재현하려는 대상은
+> **Volmit Software의 Iris = Paper/Spigot용 월드 생성(worldgen) 플러그인**이다(셰이더 아님).
+> 셰이더는 지형 모양을 바꾸지 못함. 지형 변형 로직은 아래 Iris worldgen 함수 체계를 따른다.
+
+## 5. Iris(Volmit) 지형 변형 함수 조사 (2026-07-27)
+
+리포: https://github.com/VolmitSoftware/Iris · 문서: https://docs.volmit.com/iris
+저수준 노이즈 수학은 Auburn의 **FastNoise/FastNoiseLite**를 Iris의 **CNG(Coherent Noise Generator)** 로 감싼 것.
+지형 변형은 아래 **4계층**으로 구성된다.
+
+### (A) NoiseStyle — 노이즈 "모양" 함수 (총 140개, `NoiseStyle.java`)
+- **기본 생성기**: `SIMPLEX`, `PERLIN`, `CELLULAR`(=Voronoi/Worley), `CUBIC`, `GLOB`, `CLOVER`,
+  `VASCULAR`, `IRIS`(커스텀), `FLAT`, `STATIC`(=white noise), `NOWHERE`(계열)
+- **프랙탈 변형**: `FRACTAL_FBM_*`(층상 디테일), `FRACTAL_BILLOW_*`(둥근 구름형),
+  `FRACTAL_RM_*`(=Rigid Multi, 날카로운 능선 — 산맥용) → SIMPLEX/PERLIN/IRIS/CUBIC 위에 적용
+- **옥타브 사전스택**: `BI/TRI/QUAD/QUINT/SEX/SEPT/OCT/NON/VIGOCTAVE_*` (2~20 옥타브 미리 합성)
+- **밀도 변형**: `_HALF`, `_DOUBLE`, `_THICK` 접미사
+- **보간 내장 스타일**: 이름에 `BILINEAR` / `BICUBIC` / `HERMITE` / `STARCAST_3|6|9|12` 포함
+
+### (B) InterpolationMethod — 샘플 사이 스무딩 (총 27개, `util/interpolation/InterpolationMethod.java`)
+`NONE`, `BILINEAR`, `BICUBIC`, `HERMITE`(+`_TENSE`/`_LOOSE`+bias 변형),
+`CATMULL_ROM_SPLINE`, `STARCAST_3|6|9|12`(+`BILINEAR_`/`HERMITE_` 접두),
+`BILINEAR_BEZIER`, `BILINEAR_PARAMETRIC_1_5|2|4`
+
+### (C) IrisNoiseGenerator — 단일 노이즈에 거는 변형 파라미터 (`IrisNoiseGenerator.java`)
+- `zoom`(주파수/스케일), `opacity`(출력 배수), `offsetX/Y/Z`(offsetY는 지형생성엔 지양)
+- `exponent`(noise^exp; >1 평탄화, <1 봉우리 강조)
+- `octaves`(줌이 다른 여러 생성기 합산)
+- **`fracture`(도메인 워핑)**: 자식 노이즈로 입력 좌표를 뒤틀어 흐르는/유기적 패턴 생성 ← 핵심 변형기법
+- 출력 곡선: `negative`, `parametric`, `bezier`, `sinCentered` / `seed`, `enabled`
+
+### (D) IrisGenerator — 여러 노이즈를 합성해 최종 높이 산출 (`IrisGenerator.java`)
+- `composite`(=IrisNoiseGenerator 리스트; 기본 합산, `multiplicitive`면 곱셈)
+- `interpolator`(=InterpolationMethod + 스케일), `zoom`, `opacity`, `offsetX/Z`, `seed`
+- **절벽/계단화**: `cliffHeightMin/Max` + `cliffHeightGenerator`
+- **셀 프랙처(Voronoi 균열)**: `cellFractureZoom`, `cellFractureShuffle`, `cellFractureHeight`,
+  `cellPercentSize`(0~1; 0.1이면 두꺼운 정맥+작은 셀) → 판상/고원형 지형
+
+### 웹 이식 우선순위 (heightAt 대체용 최소 서브셋)
+1. 기본: `SIMPLEX` + `PERLIN` (JS simplex-noise 등)
+2. 프랙탈: `FBM` / `BILLOW` / `RIGID_MULTI` + `octaves`
+3. 파라미터: `zoom`, `exponent`, `opacity`, `offsetX/Z`
+4. `CELLULAR`(Voronoi) — 셀/고원형
+5. `fracture`(도메인 워핑) — 자연스러운 뒤틀림

@@ -69,17 +69,45 @@
     </div>
 
     <div class="field">
-      <label for="terrain">지형 (Terrain)</label>
-      <select id="terrain">
+      <label for="noise">지형 노이즈 (Terrain)</label>
+      <select id="noise">
         <option value="flat">Flat</option>
-        <option value="hills">Rolling Hills</option>
-        <option value="spikes">Spikes</option>
+        <option value="simplex" selected>Simplex FBM (rolling)</option>
+        <option value="perlin">Perlin FBM</option>
+        <option value="ridged">Ridged (mountains)</option>
+        <option value="billow">Billow (rounded)</option>
+        <option value="cellular">Cellular (plateaus)</option>
       </select>
     </div>
 
     <div class="field">
-      <label for="size">렌더 영역 (Size) <span class="rangeval" id="sizeval">16×16</span></label>
-      <input type="range" id="size" min="8" max="128" step="8" value="16" />
+      <label for="height">최대 높이 (Height) <span class="rangeval" id="heightval">16</span></label>
+      <input type="range" id="height" min="1" max="48" step="1" value="16" />
+    </div>
+
+    <div class="field">
+      <label for="zoom">지형 스케일 (Zoom) <span class="rangeval" id="zoomval">2.0</span></label>
+      <input type="range" id="zoom" min="0.5" max="8" step="0.5" value="2" />
+    </div>
+
+    <div class="field">
+      <label for="octaves">옥타브 (Octaves) <span class="rangeval" id="octavesval">4</span></label>
+      <input type="range" id="octaves" min="1" max="8" step="1" value="4" />
+    </div>
+
+    <div class="field">
+      <label for="exponent">익스포넌트 (Exponent) <span class="rangeval" id="exponentval">1.0</span></label>
+      <input type="range" id="exponent" min="0.5" max="3" step="0.1" value="1" />
+    </div>
+
+    <div class="field">
+      <label for="fracture">프랙처/워핑 (Fracture) <span class="rangeval" id="fractureval">0</span></label>
+      <input type="range" id="fracture" min="0" max="30" step="1" value="0" />
+    </div>
+
+    <div class="field">
+      <label for="size">렌더 영역 (Size) <span class="rangeval" id="sizeval">48×48</span></label>
+      <input type="range" id="size" min="8" max="128" step="8" value="48" />
       <div class="count" id="blockcount">— blocks</div>
     </div>
 
@@ -106,13 +134,15 @@
   {
     "imports": {
       "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/",
+      "fastnoise-lite": "https://esm.sh/fastnoise-lite@1.1.1"
     }
   }
   </script>
   <script type="module">
     import * as THREE from 'three';
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import FastNoiseLite from 'fastnoise-lite'; // MIT — same noise core Iris uses internally
 
     // Placeholder block colors — swap for real textures later.
     const BLOCK_COLORS = {
@@ -193,11 +223,50 @@
       }
     }
 
-    function heightAt(x, z, terrain) {
-      if (terrain === 'flat') return 0;
-      if (terrain === 'hills') return Math.round(1.5 + 1.5 * Math.sin(x * 0.5) * Math.cos(z * 0.5));
-      if (terrain === 'spikes') return ((x + z) % 4 === 0) ? 3 : 0;
-      return 0;
+    // Iris-style noise styles mapped onto FastNoiseLite (the same core Iris uses).
+    const NOISE_STYLES = {
+      simplex:  { type: 'OpenSimplex2', fractal: 'FBm' },
+      perlin:   { type: 'Perlin',       fractal: 'FBm' },
+      ridged:   { type: 'OpenSimplex2', fractal: 'Ridged' },          // sharp mountain ridges
+      billow:   { type: 'OpenSimplex2', fractal: 'FBm', billow: true }, // rounded, puffy
+      cellular: { type: 'Cellular',     fractal: 'None' },            // Voronoi plateaus
+    };
+
+    // Build a height function h(x,z) -> integer block height from the current controls.
+    // Mirrors Iris's per-noise params: zoom, octaves, exponent, and fracture (domain warp).
+    function buildHeightFn() {
+      const style = document.getElementById('noise').value;
+      const spec = NOISE_STYLES[style];
+      if (!spec) return () => 0; // flat
+
+      const zoom     = parseFloat(document.getElementById('zoom').value);
+      const octaves  = parseInt(document.getElementById('octaves').value, 10);
+      const exponent = parseFloat(document.getElementById('exponent').value);
+      const amp      = parseInt(document.getElementById('height').value, 10);
+      const fracture = parseFloat(document.getElementById('fracture').value);
+
+      const n = new FastNoiseLite(1337);
+      n.SetNoiseType(FastNoiseLite.NoiseType[spec.type]);
+      n.SetFrequency(0.06 / zoom);                 // higher zoom -> lower freq -> bigger features
+      n.SetFractalType(FastNoiseLite.FractalType[spec.fractal]);
+      if (spec.fractal !== 'None') n.SetFractalOctaves(octaves);
+
+      // Iris "fracture" = warp input coords with a second noise (our own domain warp).
+      const warp = new FastNoiseLite(9001);
+      warp.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
+      warp.SetFrequency(0.05 / zoom);
+
+      return (x, z) => {
+        let sx = x, sz = z;
+        if (fracture > 0) {
+          sx += warp.GetNoise(x, z) * fracture;
+          sz += warp.GetNoise(x + 517.3, z - 231.7) * fracture;
+        }
+        let v = n.GetNoise(sx, sz) * 0.5 + 0.5;    // -1..1 -> 0..1
+        if (spec.billow) v = Math.abs(v * 2 - 1);  // rounded billow shape
+        v = Math.pow(Math.max(0, v), exponent);    // >1 flatter lows, <1 favors peaks
+        return Math.round(v * amp);
+      };
     }
 
     function rebuild() {
@@ -209,29 +278,42 @@
           .forEach(m => m.dispose());
       }
       const kind = document.getElementById('block').value;
-      const terrain = document.getElementById('terrain').value;
       curSize = parseInt(document.getElementById('size').value, 10);
       const c = BLOCK_COLORS[kind];
       const topCol = new THREE.Color(c.top);
       const sideCol = new THREE.Color(c.side);
 
       const half = curSize / 2;
+      const dim = curSize;
+
+      // Precompute each column's height once (resampling noise per face would be slow).
+      const hf = buildHeightFn();
+      const H = new Int16Array(dim * dim);
+      const at = (x, z) => H[(x + half) * dim + (z + half)];
+      let maxH = 0;
+      for (let x = -half; x < half; x++) {
+        for (let z = -half; z < half; z++) {
+          const h = hf(x, z);
+          H[(x + half) * dim + (z + half)] = h;
+          if (h > maxH) maxH = h;
+        }
+      }
+
       // A cell is solid if it's within the world box and at/below its column height.
       // Anything below y=0 or outside the x/z box counts as air, so the world's
       // bottom and outer walls stay visible.
       const solid = (x, y, z) => {
         if (y < 0) return false;
         if (x < -half || x >= half || z < -half || z >= half) return false;
-        return y <= heightAt(x, z, terrain);
+        return y <= at(x, z);
       };
 
       // Build ONE merged geometry holding only air-exposed faces (hidden faces culled).
       const P = [], N = [], C = [];
-      let blockCount = 0, faceCount = 0, maxH = 0;
+      let blockCount = 0, faceCount = 0;
       for (let x = -half; x < half; x++) {
         for (let z = -half; z < half; z++) {
-          const h = heightAt(x, z, terrain);
-          if (h > maxH) maxH = h;
+          const h = at(x, z);
           for (let y = 0; y <= h; y++) {
             blockCount++;
             for (const f of FACES) {
@@ -291,11 +373,23 @@
       scene.traverse(o => { if (o.material) o.material.needsUpdate = true; });
     }
 
-    ['block', 'terrain', 'size'].forEach(id =>
-      document.getElementById(id).addEventListener('change', rebuild));
-    document.getElementById('size').addEventListener('input', (e) => {
-      document.getElementById('sizeval').textContent = e.target.value + '×' + e.target.value;
+    // Live labels for range sliders (update while dragging)
+    const RANGE_LABELS = {
+      size:     v => v + '×' + v,
+      height:   v => v,
+      zoom:     v => parseFloat(v).toFixed(1),
+      octaves:  v => v,
+      exponent: v => parseFloat(v).toFixed(1),
+      fracture: v => v,
+    };
+    Object.keys(RANGE_LABELS).forEach(id => {
+      const el = document.getElementById(id);
+      el.addEventListener('input', () =>
+        document.getElementById(id + 'val').textContent = RANGE_LABELS[id](el.value));
     });
+    // Rebuild the world when any of these change (on release for range inputs)
+    ['block', 'noise', 'size', 'height', 'zoom', 'octaves', 'exponent', 'fracture'].forEach(id =>
+      document.getElementById(id).addEventListener('change', rebuild));
     document.getElementById('time').addEventListener('input', applyTime);
     document.getElementById('shader').addEventListener('change', applyShader);
 

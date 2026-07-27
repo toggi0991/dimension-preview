@@ -41,6 +41,23 @@
   .count { margin-top: 6px; text-align: right; font-size: 11px; color: var(--muted);
            font-variant-numeric: tabular-nums; }
 
+  /* --- Accordion sections (Biome / Generator / Preview) ---
+     Native <details> so multiple can stay open and it's keyboard-accessible.
+     No overflow:hidden here — the style dropdown is absolutely positioned and
+     must be allowed to overflow the section box. */
+  .accordion { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 14px; background: var(--panel-2); }
+  .accordion > summary {
+    list-style: none; cursor: pointer; user-select: none;
+    display: flex; align-items: center; gap: 8px;
+    padding: 11px 13px; font-size: 13px; font-weight: 600; color: var(--text);
+  }
+  .accordion > summary::-webkit-details-marker { display: none; }
+  .accordion > summary .acc-caret { color: var(--muted); font-size: 11px; transition: transform .15s; }
+  .accordion[open] > summary .acc-caret { transform: rotate(90deg); }
+  .accordion > summary .acc-sub { margin-left: auto; font-size: 10px; font-weight: 400; color: var(--muted); }
+  .accordion-body { padding: 14px 13px 0; border-top: 1px solid var(--line); }
+  .accordion-body .field:last-child { margin-bottom: 14px; }
+
   /* Custom style dropdown (native <select> can't emit per-option hover events) */
   .cselect { position: relative; }
   .cselect-btn {
@@ -121,79 +138,97 @@
     <h1>Dimension Preview</h1>
     <p class="sub">값을 선택하면 오른쪽에 실시간 렌더링됩니다. (a preview tool for Minecraft)</p>
 
-    <div class="field">
-      <label for="block">블록 (Block)</label>
-      <select id="block">
-        <option value="grass">Grass Block</option>
-        <option value="stone">Stone</option>
-        <option value="sand">Sand</option>
-        <option value="netherrack">Netherrack</option>
-        <option value="snow">Snow</option>
-        <option value="endstone">End Stone</option>
-      </select>
-    </div>
+    <!-- ===== Biome: block palette + height range (IrisBiome fields) ===== -->
+    <details class="accordion" open>
+      <summary><span class="acc-caret">▸</span>바이옴 (Biome)<span class="acc-sub">블록 · 높이 범위</span></summary>
+      <div class="accordion-body">
+        <div class="field">
+          <label for="block">블록 (Block)</label>
+          <select id="block">
+            <option value="grass">Grass Block</option>
+            <option value="stone">Stone</option>
+            <option value="sand">Sand</option>
+            <option value="netherrack">Netherrack</option>
+            <option value="snow">Snow</option>
+            <option value="endstone">End Stone</option>
+          </select>
+        </div>
 
-    <div class="field">
-      <label>지형 노이즈 (Terrain · Iris NoiseStyle)</label>
-      <div id="styleSelect" class="cselect">
-        <button type="button" id="styleButton" class="cselect-btn" aria-haspopup="listbox" aria-expanded="false">
-          <span class="val" id="styleLabel">—</span><span class="cselect-caret">▾</span>
-        </button>
-        <div id="styleList" class="cselect-list" role="listbox" hidden></div>
+        <div class="field">
+          <label for="hmin">높이 min <span class="rangeval" id="hminval">1</span></label>
+          <input type="range" id="hmin" min="0" max="64" step="1" value="1" />
+        </div>
+
+        <div class="field">
+          <label for="hmax">높이 max <span class="rangeval" id="hmaxval">16</span></label>
+          <input type="range" id="hmax" min="1" max="96" step="1" value="16" />
+        </div>
       </div>
-      <!-- hidden source of truth for the committed style value -->
-      <select id="noise" hidden></select>
-    </div>
+    </details>
 
-    <div class="field">
-      <label for="hmin">높이 min (biome) <span class="rangeval" id="hminval">1</span></label>
-      <input type="range" id="hmin" min="0" max="64" step="1" value="1" />
-    </div>
+    <!-- ===== Generator: noise style + shaping (IrisGenerator / IrisNoiseGenerator) ===== -->
+    <details class="accordion" open>
+      <summary><span class="acc-caret">▸</span>제너레이터 (Generator)<span class="acc-sub">노이즈 · 셰이핑</span></summary>
+      <div class="accordion-body">
+        <div class="field">
+          <label>지형 노이즈 (Terrain · Iris NoiseStyle)</label>
+          <div id="styleSelect" class="cselect">
+            <button type="button" id="styleButton" class="cselect-btn" aria-haspopup="listbox" aria-expanded="false">
+              <span class="val" id="styleLabel">—</span><span class="cselect-caret">▾</span>
+            </button>
+            <div id="styleList" class="cselect-list" role="listbox" hidden></div>
+          </div>
+          <!-- hidden source of truth for the committed style value -->
+          <select id="noise" hidden></select>
+        </div>
 
-    <div class="field">
-      <label for="hmax">높이 max (biome) <span class="rangeval" id="hmaxval">16</span></label>
-      <input type="range" id="hmax" min="1" max="96" step="1" value="16" />
-    </div>
+        <div class="field">
+          <label for="zoom">지형 스케일 (Zoom) <span class="rangeval" id="zoomval">0.50</span></label>
+          <input type="range" id="zoom" min="0.25" max="8" step="0.25" value="0.5" />
+        </div>
 
-    <div class="field">
-      <label for="zoom">지형 스케일 (Zoom) <span class="rangeval" id="zoomval">0.50</span></label>
-      <input type="range" id="zoom" min="0.25" max="8" step="0.25" value="0.5" />
-    </div>
+        <div class="field">
+          <label for="octaves">옥타브 (Octaves) <span class="rangeval" id="octavesval">4</span></label>
+          <input type="range" id="octaves" min="1" max="20" step="1" value="4" />
+        </div>
 
-    <div class="field">
-      <label for="octaves">옥타브 (Octaves) <span class="rangeval" id="octavesval">4</span></label>
-      <input type="range" id="octaves" min="1" max="20" step="1" value="4" />
-    </div>
+        <div class="field">
+          <label for="exponent">익스포넌트 (Exponent) <span class="rangeval" id="exponentval">1.0</span></label>
+          <input type="range" id="exponent" min="0.5" max="3" step="0.1" value="1" />
+        </div>
 
-    <div class="field">
-      <label for="exponent">익스포넌트 (Exponent) <span class="rangeval" id="exponentval">1.0</span></label>
-      <input type="range" id="exponent" min="0.5" max="3" step="0.1" value="1" />
-    </div>
+        <div class="field">
+          <label for="fracture">프랙처/워핑 (Fracture) <span class="rangeval" id="fractureval">0</span></label>
+          <input type="range" id="fracture" min="0" max="30" step="1" value="0" />
+        </div>
+      </div>
+    </details>
 
-    <div class="field">
-      <label for="fracture">프랙처/워핑 (Fracture) <span class="rangeval" id="fractureval">0</span></label>
-      <input type="range" id="fracture" min="0" max="30" step="1" value="0" />
-    </div>
+    <!-- ===== Preview: viewer-only settings (not exported) ===== -->
+    <details class="accordion" open>
+      <summary><span class="acc-caret">▸</span>미리보기 (Preview)<span class="acc-sub">내보내기 제외</span></summary>
+      <div class="accordion-body">
+        <div class="field">
+          <label for="size">렌더 영역 (Size) <span class="rangeval" id="sizeval">64×64</span></label>
+          <input type="range" id="size" min="8" max="128" step="8" value="64" />
+          <div class="count" id="blockcount">— blocks</div>
+        </div>
 
-    <div class="field">
-      <label for="size">렌더 영역 (Size) <span class="rangeval" id="sizeval">64×64</span></label>
-      <input type="range" id="size" min="8" max="128" step="8" value="64" />
-      <div class="count" id="blockcount">— blocks</div>
-    </div>
+        <div class="field">
+          <label for="time">시간대 (Time) <span class="rangeval" id="timeval">12:00</span></label>
+          <input type="range" id="time" min="0" max="24" step="0.5" value="12" />
+        </div>
 
-    <div class="field">
-      <label for="time">시간대 (Time) <span class="rangeval" id="timeval">12:00</span></label>
-      <input type="range" id="time" min="0" max="24" step="0.5" value="12" />
-    </div>
-
-    <div class="field">
-      <label for="shader">셰이더 프리셋 (Shader look)</label>
-      <select id="shader">
-        <option value="none">None (flat)</option>
-        <option value="soft" selected>Soft shadows</option>
-        <option value="vibrant">Vibrant</option>
-      </select>
-    </div>
+        <div class="field">
+          <label for="shader">셰이더 프리셋 (Shader look)</label>
+          <select id="shader">
+            <option value="none">None (flat)</option>
+            <option value="soft" selected>Soft shadows</option>
+            <option value="vibrant">Vibrant</option>
+          </select>
+        </div>
+      </div>
+    </details>
 
     <button type="button" id="exportBtn">내보내기 (Export)</button>
   </aside>

@@ -50,6 +50,12 @@
   - deepslate는 worldgen JSON 기반이라 이번 폼-드리븐 방식엔 당장 안 씀. 향후 지형 생성 고도화 시 재검토.
 
 ## 4. TODO (다음 단계)
+- [ ] **biome input 추가** — min/max뿐 아니라 바이옴 자체 입력(이름·derivative·layers/palette·rarity·
+      generators 링크 등)을 폼에 넣어 바이옴 단위로 구성 가능하게.
+- [ ] **아코디언 UI로 입력 분리** — `biome input` 섹션과 `generator input` 섹션을 접었다 펴는
+      아코디언으로 나눠서 폼 정리.
+- [ ] **내보내기 탭 분리** — export 모달 상단에 `biome 코드` / `generator 코드`를 클릭 전환(탭)해
+      각각 복사할 수 있게. (지금은 generator JSON 하나만 나옴)
 - [ ] **[보류]** 완전한 Iris 팩(dimension+region+biome 폴더 구조)으로 감싸 ZIP 다운로드
       → 게임에 바로 적용. *보류 사유(2026-07-27): 아직 필요성 못 느낌. 현재는 generator JSON 복사로 충분.*
 - [ ] 실제 블록 텍스처 에셋 확보 및 라이선스 확인 (플레이스홀더 → 텍스처)

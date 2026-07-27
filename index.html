@@ -38,6 +38,8 @@
     border: 1px solid var(--line); border-radius: 6px; padding: 8px;
   }
   .rangeval { float: right; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .count { margin-top: 6px; text-align: right; font-size: 11px; color: var(--muted);
+           font-variant-numeric: tabular-nums; }
 
   /* --- Right: render canvas --- */
   #stage { flex: 1; position: relative; }
@@ -73,6 +75,12 @@
         <option value="hills">Rolling Hills</option>
         <option value="spikes">Spikes</option>
       </select>
+    </div>
+
+    <div class="field">
+      <label for="size">렌더 영역 (Size) <span class="rangeval" id="sizeval">16×16</span></label>
+      <input type="range" id="size" min="8" max="128" step="8" value="16" />
+      <div class="count" id="blockcount">— blocks</div>
     </div>
 
     <div class="field">
@@ -140,10 +148,10 @@
     scene.add(ambient);
 
     const geo = new THREE.BoxGeometry(1, 1, 1);
-    let blocks = new THREE.Group();
-    scene.add(blocks);
+    let blocks = null;              // THREE.InstancedMesh, rebuilt on change
+    const dummy = new THREE.Matrix4();
+    let curSize = 16;               // render-area edge length (blocks), from #size
 
-    const SIZE = 12;
     function heightAt(x, z, terrain) {
       if (terrain === 'flat') return 0;
       if (terrain === 'hills') return Math.round(1.5 + 1.5 * Math.sin(x * 0.5) * Math.cos(z * 0.5));
@@ -152,27 +160,52 @@
     }
 
     function rebuild() {
-      scene.remove(blocks);
-      blocks = new THREE.Group();
+      // dispose the previous instanced mesh (geometry `geo` is shared, keep it)
+      if (blocks) {
+        scene.remove(blocks);
+        blocks.dispose();
+        (Array.isArray(blocks.material) ? blocks.material : [blocks.material])
+          .forEach(m => m.dispose());
+      }
       const kind = document.getElementById('block').value;
       const terrain = document.getElementById('terrain').value;
+      curSize = parseInt(document.getElementById('size').value, 10);
       const c = BLOCK_COLORS[kind];
       const topMat = new THREE.MeshStandardMaterial({ color: c.top });
       const sideMat = new THREE.MeshStandardMaterial({ color: c.side });
       const mats = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
 
-      for (let x = -SIZE/2; x < SIZE/2; x++) {
-        for (let z = -SIZE/2; z < SIZE/2; z++) {
+      // collect all block positions first so we know the instance count
+      const half = curSize / 2;
+      const positions = [];
+      for (let x = -half; x < half; x++) {
+        for (let z = -half; z < half; z++) {
           const h = heightAt(x, z, terrain);
-          for (let y = 0; y <= h; y++) {
-            const cube = new THREE.Mesh(geo, mats);
-            cube.position.set(x + 0.5, y + 0.5, z + 0.5);
-            cube.castShadow = true; cube.receiveShadow = true;
-            blocks.add(cube);
-          }
+          for (let y = 0; y <= h; y++) positions.push([x + 0.5, y + 0.5, z + 0.5]);
         }
       }
+
+      // one InstancedMesh draws every block in a few draw calls, regardless of count
+      blocks = new THREE.InstancedMesh(geo, mats, positions.length);
+      blocks.castShadow = true;
+      blocks.receiveShadow = true;
+      for (let i = 0; i < positions.length; i++) {
+        dummy.makeTranslation(positions[i][0], positions[i][1], positions[i][2]);
+        blocks.setMatrixAt(i, dummy);
+      }
+      blocks.instanceMatrix.needsUpdate = true;
       scene.add(blocks);
+
+      // grow the shadow frustum with the world so shadows aren't clipped
+      const r = half + 4;
+      sun.shadow.camera.left = -r; sun.shadow.camera.right = r;
+      sun.shadow.camera.top = r; sun.shadow.camera.bottom = -r;
+      sun.shadow.camera.updateProjectionMatrix();
+
+      // readouts
+      document.getElementById('sizeval').textContent = curSize + '×' + curSize;
+      document.getElementById('blockcount').textContent =
+        positions.length.toLocaleString() + ' blocks';
     }
 
     function applyTime() {
@@ -182,7 +215,8 @@
         (t % 1 ? '30' : '00');
       // Sun arc: t=0 midnight, 6 sunrise, 12 noon, 18 sunset.
       const ang = ((t - 6) / 24) * Math.PI * 2;
-      sun.position.set(Math.cos(ang) * 20, Math.max(2, Math.sin(ang) * 20), 8);
+      const R = curSize * 1.4 + 8; // sun distance scales with the world size
+      sun.position.set(Math.cos(ang) * R, Math.max(2, Math.sin(ang) * R), R * 0.4);
       const day = Math.max(0, Math.sin(ang));
       scene.background = new THREE.Color().setHSL(0.6, 0.5, 0.08 + day * 0.42);
       sun.intensity = 0.2 + day * 1.1;
@@ -198,8 +232,11 @@
       scene.traverse(o => { if (o.material) o.material.needsUpdate = true; });
     }
 
-    ['block', 'terrain'].forEach(id =>
+    ['block', 'terrain', 'size'].forEach(id =>
       document.getElementById(id).addEventListener('change', rebuild));
+    document.getElementById('size').addEventListener('input', (e) => {
+      document.getElementById('sizeval').textContent = e.target.value + '×' + e.target.value;
+    });
     document.getElementById('time').addEventListener('input', applyTime);
     document.getElementById('shader').addEventListener('change', applyShader);
 

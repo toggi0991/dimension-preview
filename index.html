@@ -72,6 +72,48 @@
     font-size: 11px; color: var(--muted); background: rgba(0,0,0,.4);
     padding: 4px 8px; border-radius: 4px;
   }
+
+  /* Export button (bottom of the panel) */
+  #exportBtn {
+    width: 100%; margin-top: 8px; padding: 11px; border: none; border-radius: 6px;
+    background: var(--accent); color: #0b1a0e; font: inherit; font-weight: 600; cursor: pointer;
+  }
+  #exportBtn:hover { filter: brightness(1.08); }
+
+  /* Export modal: centered overlay, box sized to 75% of the viewport */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal {
+    width: 75%; height: 75%; display: flex; flex-direction: column; overflow: hidden;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; border-bottom: 1px solid var(--line);
+  }
+  .modal-head h2 { margin: 0; font-size: 15px; }
+  .modal-close { background: none; border: none; color: var(--muted); font-size: 22px; line-height: 1; cursor: pointer; }
+  .modal-body { flex: 1; padding: 16px 18px; display: flex; flex-direction: column; overflow: hidden; }
+  .modal-body .cap { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+  .code-wrap { position: relative; flex: 1; display: flex; overflow: hidden; }
+  .code-copy {
+    position: absolute; top: 10px; right: 10px; z-index: 1; padding: 6px 12px;
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  .code-copy:hover { background: #33405e; }
+  .modal pre {
+    flex: 1; margin: 0; overflow: auto; background: #0e1015;
+    border: 1px solid var(--line); border-radius: 8px; padding: 16px;
+  }
+  .modal code {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 12.5px; color: #d6dbe6; white-space: pre;
+  }
 </style>
 </head>
 <body>
@@ -147,11 +189,29 @@
         <option value="vibrant">Vibrant</option>
       </select>
     </div>
+
+    <button type="button" id="exportBtn">내보내기 (Export)</button>
   </aside>
 
   <main id="stage">
     <div id="hint">드래그: 회전 · 휠: 줌</div>
   </main>
+
+  <div id="exportModal" class="modal-overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-label="Export">
+      <div class="modal-head">
+        <h2>내보내기 — Iris 제너레이터</h2>
+        <button type="button" class="modal-close" id="modalClose" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="cap">현재 선택값으로 만든 Iris generator JSON입니다. (a starting point for an Iris pack)</p>
+        <div class="code-wrap">
+          <button type="button" class="code-copy" id="copyBtn">복사 (Copy)</button>
+          <pre><code id="exportCode"></code></pre>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <script type="importmap">
   {
@@ -569,6 +629,48 @@
       scene.traverse(o => { if (o.material) o.material.needsUpdate = true; });
     }
 
+    // Build an Iris-generator-shaped JSON from the committed selections.
+    function buildExportJSON() {
+      const style    = document.getElementById('noise').value;
+      const zoom     = parseFloat(document.getElementById('zoom').value);
+      const octaves  = parseInt(document.getElementById('octaves').value, 10);
+      const exponent = parseFloat(document.getElementById('exponent').value);
+      const height   = parseInt(document.getElementById('height').value, 10);
+      const fracture = parseFloat(document.getElementById('fracture').value);
+
+      const noiseGen = { style, zoom, octaves, exponent };
+      if (fracture > 0) noiseGen.fracture = [{ style: 'SIMPLEX', zoom, opacity: fracture }];
+
+      const generator = {
+        zoom,
+        opacity: height,                                          // max height contribution
+        interpolator: { function: 'BILINEAR', horizontalScale: 8 },
+        composite: [noiseGen],
+      };
+      return JSON.stringify(generator, null, 2);
+    }
+
+    function openExport() {
+      document.getElementById('exportCode').textContent = buildExportJSON();
+      document.getElementById('exportModal').hidden = false;
+    }
+    function closeExport() { document.getElementById('exportModal').hidden = true; }
+
+    async function copyExport() {
+      const text = document.getElementById('exportCode').textContent;
+      const btn = document.getElementById('copyBtn');
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch {
+        const ta = document.createElement('textarea');   // fallback for older/blocked clipboard
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        document.execCommand('copy'); ta.remove();
+      }
+      const prev = btn.textContent;
+      btn.textContent = '복사됨! (Copied)';
+      setTimeout(() => (btn.textContent = prev), 1200);
+    }
+
     // Live labels for range sliders (update while dragging)
     const RANGE_LABELS = {
       size:     v => v + '×' + v,
@@ -607,6 +709,15 @@
     });
     document.getElementById('time').addEventListener('input', applyTime);
     document.getElementById('shader').addEventListener('change', applyShader);
+
+    // Export modal wiring
+    document.getElementById('exportBtn').addEventListener('click', openExport);
+    document.getElementById('modalClose').addEventListener('click', closeExport);
+    document.getElementById('copyBtn').addEventListener('click', copyExport);
+    document.getElementById('exportModal').addEventListener('click', (e) => {
+      if (e.target.id === 'exportModal') closeExport();   // click on the backdrop closes
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeExport(); });
 
     function resize() {
       const w = stage.clientWidth, h = stage.clientHeight;

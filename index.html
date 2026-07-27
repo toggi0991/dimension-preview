@@ -239,6 +239,10 @@
       Value:        0.996,
       Cellular:     1.0,    // same unit-cell lattice; scale is 1/freq in both
     };
+    // FBM amplitude match: FastNoiseLite FBm has a wider value spread than Iris's
+    // classic-simplex FBM (measured sd 0.167 vs 0.134). Narrow ours to match so the
+    // preview's peak heights line up with Iris (applied to FBm, not Billow/Ridged).
+    const FBM_AMP_MATCH = 0.8;
 
     // Placeholder block colors — swap for real textures later.
     const BLOCK_COLORS = {
@@ -537,6 +541,8 @@
           sz += warp.GetNoise(x + 517.3, z - 231.7) * fracture;
         }
         let v = n.GetNoise(sx, sz) * 0.5 + 0.5;    // -1..1 -> 0..1
+        if (cfg.fractal === 'FBm' && !cfg.billow)
+          v = 0.5 + (v - 0.5) * FBM_AMP_MATCH;     // match Iris's narrower FBM spread (measured)
         if (cfg.billow) v = Math.abs(v * 2 - 1);   // rounded billow shape
         v = Math.pow(Math.max(0, v), exponent);    // >1 flatter lows, <1 favors peaks
         return Math.round(v * amp);

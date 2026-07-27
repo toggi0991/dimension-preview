@@ -227,13 +227,18 @@
     import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
     import FastNoiseLite from 'fastnoise-lite'; // MIT — same noise core Iris uses internally
 
-    // Scale calibration (measured, not guessed): Iris samples its classic FastNoise
-    // Simplex at default frequency 0.01. OpenSimplex2 (FastNoiseLite) has a slightly
-    // SMALLER feature scale than classic simplex — measured wavelength ratio
-    // OpenSimplex2 / classic ≈ 0.886 at the same frequency. So to make the preview's
-    // feature size exactly match Iris at gen.zoom == slider, lower our frequency by it.
-    const IRIS_BASE_FREQ = 0.01;        // Iris FastNoise m_frequency default
-    const OPENSIMPLEX2_SCALE = 0.886;   // measured OpenSimplex2÷classic-simplex wavelength ratio
+    // Scale calibration (measured, not guessed). Iris samples its FastNoise at default
+    // frequency 0.01. Per noise type, FastNoiseLite's feature scale differs from Iris's,
+    // so we multiply the frequency by the measured ratio (FNL wavelength ÷ Iris
+    // wavelength) to make the preview's feature size match Iris at gen.zoom == slider.
+    const IRIS_BASE_FREQ = 0.01;   // Iris FastNoise m_frequency default
+    const TYPE_SCALE = {
+      OpenSimplex2: 0.886,  // vs Iris classic simplex (different lattice: OpenSimplex2 vs Simplex)
+      Perlin:       0.965,  // measured against a faithful old-FastNoise Perlin
+      ValueCubic:   0.989,
+      Value:        0.996,
+      Cellular:     1.0,    // same unit-cell lattice; scale is 1/freq in both
+    };
 
     // Placeholder block colors — swap for real textures later.
     const BLOCK_COLORS = {
@@ -514,10 +519,8 @@
       // Iris samples via FastNoiseDouble at its DEFAULT frequency 0.01 (no SetFrequency),
       // then divides coords by gen.zoom. Match that base so the exported gen.zoom (= this
       // slider) yields the same feature scale in-game as the preview.
-      // Scale factor is per-type: OpenSimplex2 needs 0.886 to match Iris's classic
-      // simplex (measured). Perlin/Cellular/ValueCubic/Value share the algorithm with
-      // Iris's old FastNoise, so ~1.0 (couldn't load old FastNoise to measure exactly).
-      const typeScale = cfg.type === 'OpenSimplex2' ? OPENSIMPLEX2_SCALE : 1;
+      // Per-type measured scale so preview feature size matches Iris (see TYPE_SCALE).
+      const typeScale = TYPE_SCALE[cfg.type] ?? 1;
       n.SetFrequency(IRIS_BASE_FREQ * typeScale / zoom * cfg.freqMul);
       n.SetFractalType(FastNoiseLite.FractalType[cfg.fractal]);
       if (cfg.fractal !== 'None') n.SetFractalOctaves(octaves);
@@ -525,7 +528,7 @@
       // Iris "fracture" = warp input coords with a second noise (our own domain warp).
       const warp = new FastNoiseLite(9001);
       warp.SetNoiseType(FastNoiseLite.NoiseType.OpenSimplex2);
-      warp.SetFrequency(IRIS_BASE_FREQ * OPENSIMPLEX2_SCALE / zoom);
+      warp.SetFrequency(IRIS_BASE_FREQ * TYPE_SCALE.OpenSimplex2 / zoom);
 
       return (x, z) => {
         let sx = x, sz = z;
@@ -670,7 +673,7 @@
       const noiseGen = { octaves, exponent, style: styleObj };
 
       // IrisGenerator: opacity (= max height) + zoom. The preview frequency is already
-      // scale-matched to Iris (see OPENSIMPLEX2_SCALE), so the slider IS gen.zoom.
+      // scale-matched to Iris per noise type (see TYPE_SCALE), so the slider IS gen.zoom.
       const generator = {
         zoom,
         opacity: height,

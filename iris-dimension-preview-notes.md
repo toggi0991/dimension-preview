@@ -166,4 +166,7 @@ ValueCubic 382.5(×2.78) / Value 398.7(×2.90) / Cellular 측정불가(셀값). 
 - **한 배율(0.886)을 전 타입에 적용하면 SIMPLEX만 맞고 나머지는 틀림** → 타입별 배율로 수정:
   - `OpenSimplex2`(SIMPLEX/IRIS/NOWHERE류) → **0.886** (Iris 등가물 실측, 정확)
   - Perlin/Cellular/ValueCubic/Value → **1.0** (근사: FNL≈옛 FastNoise 같은 알고리즘 가정)
-- ⚠️ 비-SIMPLEX 타입은 Iris 옛 FastNoise를 CDN에서 못 불러와 **정확 실측 미완**. 게임 확인 필요.
+- 비-SIMPLEX 타입: 측정 전용으로 옛 FastNoise 격자(Perlin/Value/Cubic)를 브라우저에 주입해
+  **직접 실측 완료**(배포엔 미포함). FNL÷Iris 파장비:
+  - OpenSimplex2 **0.886** · Perlin **0.965** · ValueCubic **0.989** · Value **0.996** · Cellular **1.0**
+  - 격자가 같아 대부분 ~1.0 근처(1~3.5% 차)지만 실측값으로 확정 적용. → `TYPE_SCALE` 맵.

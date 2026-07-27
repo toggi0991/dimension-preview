@@ -629,22 +629,29 @@
       scene.traverse(o => { if (o.material) o.material.needsUpdate = true; });
     }
 
-    // Build an Iris-generator-shaped JSON from the committed selections.
+    // Build a schema-correct Iris generator JSON from the committed selections.
+    // Field names/nesting mirror Iris: IrisGenerator -> composite[IrisNoiseGenerator]
+    // where `style` is an IrisGeneratorStyle OBJECT (not a bare string), and domain
+    // warp is IrisGeneratorStyle.fracture (a nested IrisGeneratorStyle).
     function buildExportJSON() {
-      const style    = document.getElementById('noise').value;
+      const style    = document.getElementById('noise').value;   // NoiseStyle enum name
       const zoom     = parseFloat(document.getElementById('zoom').value);
       const octaves  = parseInt(document.getElementById('octaves').value, 10);
       const exponent = parseFloat(document.getElementById('exponent').value);
       const height   = parseInt(document.getElementById('height').value, 10);
       const fracture = parseFloat(document.getElementById('fracture').value);
 
-      const noiseGen = { style, zoom, octaves, exponent };
-      if (fracture > 0) noiseGen.fracture = [{ style: 'SIMPLEX', zoom, opacity: fracture }];
+      const styleObj = { style, zoom, exponent };                // IrisGeneratorStyle
+      if (fracture > 0) {
+        styleObj.fracture = { style: 'SIMPLEX', zoom, multiplier: fracture }; // domain warp
+      }
 
-      const generator = {
+      const noiseGen = { zoom, octaves, exponent, style: styleObj }; // IrisNoiseGenerator
+
+      const generator = {                                        // IrisGenerator (top level)
         zoom,
-        opacity: height,                                          // max height contribution
-        interpolator: { function: 'BILINEAR', horizontalScale: 8 },
+        opacity: height,                                         // max height contribution
+        interpolator: { function: 'BILINEAR_STARCAST_6', horizontalScale: 7 },
         composite: [noiseGen],
       };
       return JSON.stringify(generator, null, 2);

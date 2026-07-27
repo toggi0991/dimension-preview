@@ -101,3 +101,31 @@
 3. 파라미터: `zoom`, `exponent`, `opacity`, `offsetX/Z`
 4. `CELLULAR`(Voronoi) — 셀/고원형
 5. `fracture`(도메인 워핑) — 자연스러운 뒤틀림
+
+## 6. Export JSON 정확 스키마 (소스 확정, 2026-07-27)
+
+export 시 이 구조를 따라야 Iris가 받아들임 (Gson: Java 필드명 = JSON 키).
+
+- **`IrisNoiseGenerator.style`은 문자열이 아니라 `IrisGeneratorStyle` 객체** (초기 버그: 문자열로 넣었음 → 수정 완료)
+- **IrisGeneratorStyle** (`IrisGeneratorStyle.java`): `style`(NoiseStyle enum, 기본 FLAT),
+  `zoom`, `exponent`, `cellularFrequency`, `cellularZoom`, `multiplier`("parent가 fracture일 때만"),
+  `axialFracturing`, `expression`/`script`/`imageMap`, **`fracture`(중첩 IrisGeneratorStyle)** ← 도메인 워핑
+- **IrisInterpolator** (`util/interpolation` 참조 아니라 `engine/object/IrisInterpolator.java`):
+  `function`(InterpolationMethod, 기본 `BILINEAR_STARCAST_6`), `horizontalScale`(기본 7)
+- **IrisNoiseGenerator**: `zoom`, `opacity`, `offsetX/Y/Z`, `seed`, `negative`, `parametric`,
+  `bezier`, `sinCentered`, `exponent`, `enabled`, `octaves`, `style`(IrisGeneratorStyle), `fracture`(IrisNoiseGenerator 리스트)
+- **IrisGenerator**: `zoom`, `opacity`, `interpolator`, `composite`(IrisNoiseGenerator 리스트),
+  `cliffHeightMin/Max`, `cliffHeightGenerator`, `cellFractureZoom/Shuffle/Height`, `cellPercentSize`, `multiplicitive`, `offsetX/Z`, `seed`
+
+올바른 최소 export 예:
+```json
+{
+  "zoom": 2, "opacity": 24,
+  "interpolator": { "function": "BILINEAR_STARCAST_6", "horizontalScale": 7 },
+  "composite": [
+    { "zoom": 2, "octaves": 4, "exponent": 1,
+      "style": { "style": "FRACTAL_RM_SIMPLEX", "zoom": 2, "exponent": 1,
+                 "fracture": { "style": "SIMPLEX", "zoom": 2, "multiplier": 12 } } }
+  ]
+}
+```

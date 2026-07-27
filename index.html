@@ -220,6 +220,16 @@
     let curSize = 16;               // render-area edge length (blocks), from #size
     let previewStyle = null;        // style being hovered in the dropdown (null = use committed)
 
+    // Debounce hover rebuilds: highlight moves instantly, terrain rebuilds once the
+    // pointer settles (rapid hovering across options collapses to a single rebuild).
+    let hoverRebuildTimer = null;
+    const HOVER_DEBOUNCE_MS = 40;
+    function scheduleRebuild() {
+      clearTimeout(hoverRebuildTimer);
+      hoverRebuildTimer = setTimeout(() => { hoverRebuildTimer = null; rebuild(); }, HOVER_DEBOUNCE_MS);
+    }
+    function cancelScheduledRebuild() { clearTimeout(hoverRebuildTimer); hoverRebuildTimer = null; }
+
     // Unit-cube faces: outward dir, 4 corner offsets (any rectangular loop order —
     // winding is fixed at emit time), and which palette color the face uses.
     const FACES = [
@@ -369,8 +379,8 @@
           opt.setAttribute('role', 'option');
           opt.addEventListener('mouseenter', () => {           // hover -> preview this style
             list.querySelectorAll('.cselect-opt.hover').forEach(e => e.classList.remove('hover'));
-            opt.classList.add('hover');
-            previewStyle = n; rebuild();
+            opt.classList.add('hover');                        // highlight instantly
+            previewStyle = n; scheduleRebuild();               // terrain rebuild is debounced
           });
           opt.addEventListener('click', () => commitStyle(n)); // click -> commit
           list.appendChild(opt);
@@ -382,6 +392,7 @@
 
     // Commit a style as the selected value; syncs label + octaves and drops any preview.
     function commitStyle(n, silent) {
+      cancelScheduledRebuild();                    // don't let a pending preview fire after commit
       document.getElementById('noise').value = n;
       document.getElementById('styleLabel').textContent = n;
       const cfg = irisStyleToFNL(n);
@@ -585,12 +596,12 @@
       if (previewStyle !== null) {                 // pointer left the list -> revert preview
         previewStyle = null;
         document.querySelectorAll('#styleList .cselect-opt.hover').forEach(e => e.classList.remove('hover'));
-        rebuild();
+        scheduleRebuild();
       }
     });
     document.addEventListener('click', (e) => {    // click outside closes + drops preview
       if (!document.getElementById('styleSelect').contains(e.target)) {
-        if (previewStyle !== null) { previewStyle = null; rebuild(); }
+        if (previewStyle !== null) { previewStyle = null; scheduleRebuild(); }
         closeStyleList();
       }
     });

@@ -146,8 +146,13 @@
     </div>
 
     <div class="field">
-      <label for="height">최대 높이 (Height) <span class="rangeval" id="heightval">16</span></label>
-      <input type="range" id="height" min="1" max="48" step="1" value="16" />
+      <label for="hmin">높이 min (biome) <span class="rangeval" id="hminval">1</span></label>
+      <input type="range" id="hmin" min="0" max="64" step="1" value="1" />
+    </div>
+
+    <div class="field">
+      <label for="hmax">높이 max (biome) <span class="rangeval" id="hmaxval">16</span></label>
+      <input type="range" id="hmax" min="1" max="96" step="1" value="16" />
     </div>
 
     <div class="field">
@@ -515,7 +520,9 @@
         ? Math.min(20, Math.max(1, cfg.octaves))
         : parseInt(document.getElementById('octaves').value, 10);
       const exponent = parseFloat(document.getElementById('exponent').value);
-      const amp      = parseInt(document.getElementById('height').value, 10);
+      const hmin     = parseInt(document.getElementById('hmin').value, 10);
+      const hmax     = parseInt(document.getElementById('hmax').value, 10);
+      const lo = Math.min(hmin, hmax), hi = Math.max(hmin, hmax);   // biome height range
       const fracture = parseFloat(document.getElementById('fracture').value);
 
       const n = new FastNoiseLite(1337);
@@ -545,7 +552,7 @@
           v = 0.5 + (v - 0.5) * FBM_AMP_MATCH;     // match Iris's narrower FBM spread (measured)
         if (cfg.billow) v = Math.abs(v * 2 - 1);   // rounded billow shape
         v = Math.pow(Math.max(0, v), exponent);    // >1 flatter lows, <1 favors peaks
-        return Math.round(v * amp);
+        return Math.round(lo + (hi - lo) * v);     // lerp(min, max, g) — Iris biome mapping
       };
     }
 
@@ -714,7 +721,8 @@
     // Live labels for range sliders (update while dragging)
     const RANGE_LABELS = {
       size:     v => v + '×' + v,
-      height:   v => v,
+      hmin:     v => v,
+      hmax:     v => v,
       zoom:     v => parseFloat(v).toFixed(2),
       octaves:  v => v,
       exponent: v => parseFloat(v).toFixed(1),
@@ -726,7 +734,7 @@
         document.getElementById(id + 'val').textContent = RANGE_LABELS[id](el.value));
     });
     // Rebuild the world when any of these change (on release for range inputs)
-    ['block', 'size', 'height', 'zoom', 'octaves', 'exponent', 'fracture'].forEach(id =>
+    ['block', 'size', 'hmin', 'hmax', 'zoom', 'octaves', 'exponent', 'fracture'].forEach(id =>
       document.getElementById(id).addEventListener('change', rebuild));
     // Custom style dropdown: toggle open, hover-preview, revert on leave, commit on click
     document.getElementById('styleButton').addEventListener('click', (e) => {

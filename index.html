@@ -73,10 +73,12 @@
   /* Palette-layer editor: block | min | max | delete */
   .layer-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
   .layer-add {
+    flex: none; white-space: nowrap;   /* keep on one line; don't get squeezed by the label */
     background: var(--panel-2); color: var(--accent); border: 1px solid var(--line);
-    border-radius: 6px; padding: 4px 10px; font: inherit; font-size: 11px; cursor: pointer;
+    border-radius: 6px; padding: 5px 10px; font: inherit; font-size: 11px; cursor: pointer;
   }
   .layer-add:hover { border-color: var(--accent); }
+  .layer-head label { flex: 1; min-width: 0; }   /* label takes the rest, wraps if needed */
   .layer-cols, .layer {
     display: grid; grid-template-columns: 1fr 48px 48px 22px; gap: 6px; align-items: center;
   }
@@ -87,6 +89,7 @@
   .layer, .decor { margin-bottom: 6px; }
   .layer select, .decor select { padding: 6px; font-size: 12px; }
   .layer input[type=number], .decor input[type=number] { padding: 6px; text-align: center; }
+  .decor input[type=text] { padding: 6px; font-size: 12px; }
   .layer-del {
     background: none; border: none; color: var(--muted); font-size: 18px; line-height: 1;
     cursor: pointer; padding: 0;
@@ -263,6 +266,7 @@
           </div>
           <div class="decor-cols"><span>블록</span><span>확률</span><span>min</span><span>max</span><span></span></div>
           <div id="decorList"></div>
+          <datalist id="decorBlockList"></datalist>
           <p class="layer-note">표면 위에 잔디·꽃·선인장 등을 확률(0~1)로 배치. min~max는 세로 스택 높이. 앞 항목이 우선.</p>
         </div>
 
@@ -528,14 +532,17 @@
     // Render the decorator-editor rows and wire their inputs.
     function renderDecorators(){
       const list = document.getElementById('decorList');
-      const opts = sel => Object.keys(DECOR_BLOCKS).map(k =>
-        `<option value="${k}"${k === sel ? ' selected' : ''}>${DECOR_BLOCKS[k].label}</option>`).join('');
+      // Populate the autocomplete datalist once (known blocks; free typing still allowed).
+      const dl = document.getElementById('decorBlockList');
+      if (dl && !dl.children.length)
+        dl.innerHTML = Object.keys(DECOR_BLOCKS).map(k =>
+          `<option value="${k}">${DECOR_BLOCKS[k].label}</option>`).join('');
       list.innerHTML = '';
       decorators.forEach((d, i) => {
         const row = document.createElement('div');
         row.className = 'decor';
         row.innerHTML =
-          `<select data-i="${i}" data-k="block">${opts(d.block)}</select>` +
+          `<input type="text" list="decorBlockList" data-i="${i}" data-k="block" value="${d.block}" placeholder="블록 id" title="블록 id (예: poppy)" />` +
           `<input type="number" data-i="${i}" data-k="chance" min="0" max="1" step="0.01" value="${d.chance}" title="확률 0~1" />` +
           `<input type="number" data-i="${i}" data-k="stackMin" min="1" max="12" value="${d.stackMin}" title="스택 최소" />` +
           `<input type="number" data-i="${i}" data-k="stackMax" min="1" max="12" value="${d.stackMax}" title="스택 최대" />` +
@@ -544,7 +551,7 @@
       });
       list.querySelectorAll('select, input').forEach(el => el.addEventListener('change', () => {
         const i = +el.dataset.i, k = el.dataset.k;
-        if (k === 'block') decorators[i].block = el.value;
+        if (k === 'block') decorators[i].block = el.value.trim();
         else if (k === 'chance') decorators[i].chance = Math.max(0, Math.min(1, parseFloat(el.value) || 0));
         else {
           decorators[i][k] = Math.max(1, parseInt(el.value, 10) || 1);

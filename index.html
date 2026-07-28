@@ -80,10 +80,13 @@
   .layer-cols, .layer {
     display: grid; grid-template-columns: 1fr 48px 48px 22px; gap: 6px; align-items: center;
   }
-  .layer-cols { font-size: 10px; color: var(--muted); margin-bottom: 4px; padding: 0 2px; }
-  .layer { margin-bottom: 6px; }
-  .layer select { padding: 6px; font-size: 12px; }
-  .layer input[type=number] { padding: 6px; text-align: center; }
+  .decor-cols, .decor {
+    display: grid; grid-template-columns: 1fr 46px 38px 38px 22px; gap: 6px; align-items: center;
+  }
+  .layer-cols, .decor-cols { font-size: 10px; color: var(--muted); margin-bottom: 4px; padding: 0 2px; }
+  .layer, .decor { margin-bottom: 6px; }
+  .layer select, .decor select { padding: 6px; font-size: 12px; }
+  .layer input[type=number], .decor input[type=number] { padding: 6px; text-align: center; }
   .layer-del {
     background: none; border: none; color: var(--muted); font-size: 18px; line-height: 1;
     cursor: pointer; padding: 0;
@@ -251,6 +254,16 @@
           <div class="layer-cols"><span>블록</span><span>min</span><span>max</span><span></span></div>
           <div id="layerList"></div>
           <p class="layer-note">각 레이어가 두께 min~max(블록) 만큼 표면부터 쌓이고, 그 아래는 디멘션 기반암(stone)이 채웁니다.</p>
+        </div>
+
+        <div class="field">
+          <div class="layer-head">
+            <label style="margin:0" for="decorAdd">데코레이터 (Decorators · 표면 식생)</label>
+            <button type="button" class="layer-add" id="decorAdd">+ 데코</button>
+          </div>
+          <div class="decor-cols"><span>블록</span><span>확률</span><span>min</span><span>max</span><span></span></div>
+          <div id="decorList"></div>
+          <p class="layer-note">표면 위에 잔디·꽃·선인장 등을 확률(0~1)로 배치. min~max는 세로 스택 높이. 앞 항목이 우선.</p>
         </div>
 
         <div class="field">
@@ -486,6 +499,68 @@
       }));
     }
 
+    // --- Surface decorators (grass / flowers / cacti …) placed on top of terrain. ---
+    // `column: true` blocks (cactus, cane, bamboo) render as a stacked pillar; the rest
+    // as a single thin plant. Rendered as thin boxes in the preview; exported as
+    // IrisDecorator entries { palette, chance, stackMin, stackMax }.
+    const DECOR_BLOCKS = {
+      short_grass:    { label:'Short Grass',    color:0x5fa63a },
+      tall_grass:     { label:'Tall Grass',     color:0x57993a },
+      fern:           { label:'Fern',           color:0x4f8a3d },
+      poppy:          { label:'Poppy',          color:0xd7352a },
+      dandelion:      { label:'Dandelion',      color:0xe6d21f },
+      cornflower:     { label:'Cornflower',     color:0x5f7fd6 },
+      oxeye_daisy:    { label:'Oxeye Daisy',    color:0xe8ecef },
+      red_tulip:      { label:'Red Tulip',      color:0xd0362a },
+      azure_bluet:    { label:'Azure Bluet',    color:0xdfe6ea },
+      cactus:         { label:'Cactus',         color:0x4e7d3a, column:true },
+      sugar_cane:     { label:'Sugar Cane',     color:0x93c06a, column:true },
+      bamboo:         { label:'Bamboo',         color:0x7ba640, column:true },
+      dead_bush:      { label:'Dead Bush',      color:0x8a6d3b },
+      brown_mushroom: { label:'Brown Mushroom', color:0x9b7355 },
+      red_mushroom:   { label:'Red Mushroom',   color:0xc7413a },
+    };
+    // Earlier decorators have priority (first whose per-column chance passes wins).
+    let decorators = [
+      { block:'short_grass', chance:0.20, stackMin:1, stackMax:1 },
+    ];
+
+    // Render the decorator-editor rows and wire their inputs.
+    function renderDecorators(){
+      const list = document.getElementById('decorList');
+      const opts = sel => Object.keys(DECOR_BLOCKS).map(k =>
+        `<option value="${k}"${k === sel ? ' selected' : ''}>${DECOR_BLOCKS[k].label}</option>`).join('');
+      list.innerHTML = '';
+      decorators.forEach((d, i) => {
+        const row = document.createElement('div');
+        row.className = 'decor';
+        row.innerHTML =
+          `<select data-i="${i}" data-k="block">${opts(d.block)}</select>` +
+          `<input type="number" data-i="${i}" data-k="chance" min="0" max="1" step="0.01" value="${d.chance}" title="확률 0~1" />` +
+          `<input type="number" data-i="${i}" data-k="stackMin" min="1" max="12" value="${d.stackMin}" title="스택 최소" />` +
+          `<input type="number" data-i="${i}" data-k="stackMax" min="1" max="12" value="${d.stackMax}" title="스택 최대" />` +
+          `<button type="button" class="layer-del" data-i="${i}" title="삭제">×</button>`;
+        list.appendChild(row);
+      });
+      list.querySelectorAll('select, input').forEach(el => el.addEventListener('change', () => {
+        const i = +el.dataset.i, k = el.dataset.k;
+        if (k === 'block') decorators[i].block = el.value;
+        else if (k === 'chance') decorators[i].chance = Math.max(0, Math.min(1, parseFloat(el.value) || 0));
+        else {
+          decorators[i][k] = Math.max(1, parseInt(el.value, 10) || 1);
+          if (decorators[i].stackMin > decorators[i].stackMax) {
+            if (k === 'stackMin') decorators[i].stackMax = decorators[i].stackMin;
+            else decorators[i].stackMin = decorators[i].stackMax;
+            renderDecorators();
+          }
+        }
+        rebuild();
+      }));
+      list.querySelectorAll('.layer-del').forEach(b => b.addEventListener('click', () => {
+        decorators.splice(+b.dataset.i, 1); renderDecorators(); rebuild();
+      }));
+    }
+
     const stage = document.getElementById('stage');
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 1000);
@@ -539,6 +614,14 @@
     }
     function cancelScheduledRebuild() { clearTimeout(hoverRebuildTimer); hoverRebuildTimer = null; }
 
+    // Coalesced rebuild for live slider dragging: many 'input' events collapse into a
+    // single rebuild per animation frame, so terrain updates smoothly while dragging.
+    let rebuildRAF = 0;
+    function requestRebuild() {
+      if (rebuildRAF) return;
+      rebuildRAF = requestAnimationFrame(() => { rebuildRAF = 0; rebuild(); });
+    }
+
     // Unit-cube faces: outward dir, 4 corner offsets (any rectangular loop order —
     // winding is fixed at emit time), and which palette color the face uses.
     const FACES = [
@@ -563,6 +646,24 @@
         P.push(q[idx][0], q[idx][1], q[idx][2]);
         N.push(nx, ny, nz);
         C.push(col.r, col.g, col.b);
+      }
+    }
+
+    // Emit a full box of arbitrary half-extents (used for decorator plants). Same
+    // winding logic as emitFace; corners (±0.5) are scaled by 2*half per axis.
+    function emitBox(cx, cy, cz, hx, hy, hz, col, P, N, C) {
+      for (const f of FACES) {
+        const [nx, ny, nz] = f.dir;
+        const q = f.corners.map(o => [cx + o[0]*2*hx, cy + o[1]*2*hy, cz + o[2]*2*hz]);
+        const ax=q[1][0]-q[0][0], ay=q[1][1]-q[0][1], az=q[1][2]-q[0][2];
+        const bx=q[2][0]-q[0][0], by=q[2][1]-q[0][1], bz=q[2][2]-q[0][2];
+        const flip = ((ay*bz-az*by)*nx + (az*bx-ax*bz)*ny + (ax*by-ay*bx)*nz) < 0;
+        const tris = flip ? [0,2,1, 0,3,2] : [0,1,2, 0,2,3];
+        for (const idx of tris) {
+          P.push(q[idx][0], q[idx][1], q[idx][2]);
+          N.push(nx, ny, nz);
+          C.push(col.r, col.g, col.b);
+        }
       }
     }
 
@@ -833,6 +934,28 @@
         return y <= at(x, z);
       };
 
+      // Decorator plant colors (cached per block kind).
+      const plantCache = {};
+      const plantColFor = b => (plantCache[b] ||= new THREE.Color(DECOR_BLOCKS[b]?.color ?? 0x5fa63a));
+
+      // Place at most one decorator plant on a column's surface. Earlier decorators
+      // have priority (first whose per-column chance passes wins).
+      const emitDecorator = (x, z, h) => {
+        for (let i = 0; i < decorators.length; i++) {
+          const d = decorators[i];
+          if (hash01(x, z, 100 + i) >= d.chance) continue;
+          const spec = DECOR_BLOCKS[d.block] || {};
+          const span = Math.max(0, d.stackMax - d.stackMin);
+          const stack = d.stackMin + (span ? Math.floor(hash01(x, z, 200 + i) * (span + 1)) : 0);
+          const col = !!spec.column;
+          const hw = col ? 0.42 : 0.16;              // half width (pillar vs thin plant)
+          const ph = col ? stack : 0.85;             // total height in blocks
+          emitBox(x + 0.5, (h + 1) + ph / 2, z + 0.5, hw, ph / 2, hw, plantColFor(d.block), P, N, C);
+          faceCount += 6;
+          return;
+        }
+      };
+
       // Build ONE merged geometry holding only air-exposed faces (hidden faces culled).
       const P = [], N = [], C = [];
       let blockCount = 0, faceCount = 0;
@@ -848,6 +971,7 @@
               faceCount++;
             }
           }
+          emitDecorator(x, z, h);   // grass / flowers / cacti on the surface
         }
       }
 
@@ -959,6 +1083,18 @@
         layers,
         generators: [ { generator: 'terrain', min: lo, max: hi } ],
       };
+
+      // IrisDecorator entries. stackMin/Max only when stacking above 1 (plants > 1 tall).
+      if (decorators.length) {
+        biome.decorators = decorators.map(d => {
+          const dec = { palette: [ d.block ], chance: d.chance };
+          if (d.stackMin > 1 || d.stackMax > 1) {
+            dec.stackMin = d.stackMin;
+            dec.stackMax = Math.max(d.stackMin, d.stackMax);
+          }
+          return dec;
+        });
+      }
       return JSON.stringify(biome, null, 2);
     }
 
@@ -1002,18 +1138,26 @@
       exponent: v => parseFloat(v).toFixed(1),
       fracture: v => v,
     };
+    // Range sliders: update the label AND rebuild live while dragging (coalesced per
+    // frame via requestRebuild so large worlds stay smooth).
     Object.keys(RANGE_LABELS).forEach(id => {
       const el = document.getElementById(id);
-      el.addEventListener('input', () =>
-        document.getElementById(id + 'val').textContent = RANGE_LABELS[id](el.value));
+      el.addEventListener('input', () => {
+        document.getElementById(id + 'val').textContent = RANGE_LABELS[id](el.value);
+        requestRebuild();
+      });
     });
-    // Rebuild the world when any of these change (on release for range inputs)
-    ['derivative', 'size', 'hmin', 'hmax', 'zoom', 'octaves', 'exponent', 'fracture'].forEach(id =>
-      document.getElementById(id).addEventListener('change', rebuild));
+    // Selects rebuild on change (no live-drag needed)
+    document.getElementById('derivative').addEventListener('change', rebuild);
     // Add a new palette layer (defaults to a thin stone band)
     document.getElementById('layerAdd').addEventListener('click', () => {
       biomeLayers.push({ block: 'stone', min: 1, max: 2 });
       renderLayers(); rebuild();
+    });
+    // Add a new surface decorator (defaults to occasional short grass)
+    document.getElementById('decorAdd').addEventListener('click', () => {
+      decorators.push({ block: 'poppy', chance: 0.05, stackMin: 1, stackMax: 1 });
+      renderDecorators(); rebuild();
     });
     // Custom style dropdown: toggle open, hover-preview, revert on leave, commit on click
     document.getElementById('styleButton').addEventListener('click', (e) => {
@@ -1087,6 +1231,7 @@
       ['label[for="rarity"]',     '리전이 바이옴을 고를 때의 가중치. 가중치=1/rarity 라 값이 클수록 드물게 등장합니다(1=가장 흔함, 범위 1~512).'],
       ['label[for="bcolor"]',     'Iris 스튜디오 미리보기 지도에서 이 바이옴을 칠하는 색. 실제 플레이엔 영향이 없습니다.'],
       ['label[for="layerAdd"]',   '표면부터 아래로 쌓이는 재질 층. 각 층을 두께 min~max(블록)만큼 채우고, 합보다 깊은 곳은 디멘션 기반암(stone)이 채웁니다.'],
+      ['label[for="decorAdd"]',   '표면 위 식생(잔디·꽃·선인장 등). 각 항목을 확률(0~1)로 배치하고, min~max는 세로 스택 높이입니다. 목록에서 앞선 항목이 우선합니다.'],
       ['label[for="hmin"]',       '이 바이옴 지형의 최저 높이. 노이즈 출력(0~1)을 높이=lerp(min,max,노이즈)로 매핑합니다(해수면 기준 상대값).'],
       ['label[for="hmax"]',       '이 바이옴 지형의 최고 높이. 노이즈가 1에 가까울수록 이 높이에 도달합니다.'],
       ['#lblNoise',               '지형의 기본 노이즈 알고리즘·형태. Simplex=완만한 언덕, Cellular=구역, Billow=뭉게구름, Ridged=날카로운 능선 등.'],
@@ -1115,7 +1260,7 @@
       }
     }
 
-    populateStyles(); renderLayers(); addTips(); rebuild(); applyTime(); applyShader(); resize();
+    populateStyles(); renderLayers(); renderDecorators(); addTips(); rebuild(); applyTime(); applyShader(); resize();
     (function loop() {
       requestAnimationFrame(loop);
       controls.update();

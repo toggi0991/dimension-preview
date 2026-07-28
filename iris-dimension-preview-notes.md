@@ -55,6 +55,10 @@
 - [x] **아코디언 UI로 입력 분리** — 바이옴 / 제너레이터 / 미리보기 3개 `<details>` 아코디언. (완료)
 - [x] **내보내기 탭 분리** — export 모달에 `biome 코드` / `generator 코드` 탭. buildBiomeJSON /
       buildExportJSON 각각 출력, 복사는 활성 탭 기준. (완료)
+- [x] **속성 도움말 ⓘ** — 각 라벨 우측 정보 아이콘 호버 시 설명 툴팁(body-level fixed 박스). (2026-07-28)
+- [x] **range 실시간 렌더** — 모든 슬라이더 `input`→`requestRebuild`(rAF로 프레임당 1회). (2026-07-28)
+- [x] **decorators(표면 식생)** — 데코레이터 편집기(블록·확률·스택) + 프리뷰 마커(emitBox) +
+      biome export `decorators[]`. 잔디·꽃=얇은 마커, cactus/cane/bamboo=기둥. (2026-07-28)
 - [ ] **[보류]** 완전한 Iris 팩(dimension+region+biome 폴더 구조)으로 감싸 ZIP 다운로드
       → 게임에 바로 적용. *보류 사유(2026-07-27): 아직 필요성 못 느낌. 현재는 generator JSON 복사로 충분.*
 - [ ] 실제 블록 텍스처 에셋 확보 및 라이선스 확인 (플레이스홀더 → 텍스처)

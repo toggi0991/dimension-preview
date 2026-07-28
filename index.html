@@ -100,6 +100,24 @@
   }
   .tab.active { color: var(--accent); border-color: var(--accent); }
 
+  /* Info icon (right-aligned in a label) + its hover tooltip.
+     The tooltip is a single body-level fixed box (see JS) so the panel's
+     overflow never clips it. */
+  .info {
+    float: right; margin-left: 6px; cursor: help;
+    width: 16px; height: 16px; border: 1px solid var(--line); border-radius: 50%;
+    font: italic 700 10px/14px Georgia, "Times New Roman", serif;
+    text-align: center; color: var(--muted);
+  }
+  .info:hover, .info:focus { color: var(--accent); border-color: var(--accent); outline: none; }
+  .tipbox {
+    position: fixed; z-index: 1000; width: 240px; padding: 9px 11px;
+    background: #0e1015; border: 1px solid var(--accent); border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.55);
+    font-size: 11px; line-height: 1.55; color: var(--text); pointer-events: none;
+  }
+  .tipbox[hidden] { display: none; }
+
   /* Custom style dropdown (native <select> can't emit per-option hover events) */
   .cselect { position: relative; }
   .cselect-btn {
@@ -252,7 +270,7 @@
       <summary><span class="acc-caret">▸</span>제너레이터 (Generator)<span class="acc-sub">노이즈 · 셰이핑</span></summary>
       <div class="accordion-body">
         <div class="field">
-          <label>지형 노이즈 (Terrain · Iris NoiseStyle)</label>
+          <label id="lblNoise">지형 노이즈 (Terrain · Iris NoiseStyle)</label>
           <div id="styleSelect" class="cselect">
             <button type="button" id="styleButton" class="cselect-btn" aria-haspopup="listbox" aria-expanded="false">
               <span class="val" id="styleLabel">—</span><span class="cselect-caret">▾</span>
@@ -1048,7 +1066,56 @@
       jsHeapMB: performance.memory ? +(performance.memory.usedJSHeapSize / 1048576).toFixed(1) : null,
     });
 
-    populateStyles(); renderLayers(); rebuild(); applyTime(); applyShader(); resize();
+    // --- Property help: right-aligned ⓘ icon per label, hover shows a tooltip. ---
+    // One body-level fixed box so the panel's overflow never clips it.
+    const tipBox = document.createElement('div');
+    tipBox.className = 'tipbox'; tipBox.hidden = true;
+    document.body.appendChild(tipBox);
+    function placeTip(icon) {
+      const r = icon.getBoundingClientRect();
+      const tw = tipBox.offsetWidth, th = tipBox.offsetHeight, m = 8;
+      let left = r.right + m;                                  // prefer right of the icon
+      if (left + tw > window.innerWidth - m) left = r.left - tw - m; // else flip left
+      left = Math.max(m, left);
+      let top = r.top + r.height / 2 - th / 2;                 // vertically centered
+      top = Math.max(m, Math.min(top, window.innerHeight - th - m));
+      tipBox.style.left = left + 'px'; tipBox.style.top = top + 'px';
+    }
+    const TIPS = [
+      ['label[for="bname"]',      '바이옴의 표시 이름(파일명과 별개). 식별용 라벨이며 지형 생성엔 영향이 없습니다.'],
+      ['label[for="derivative"]', '색·안개·물색·몹·구조물 자격을 빌려오는 바닐라 바이옴(필수). 이 툴은 잔디 색조를 반영합니다.'],
+      ['label[for="rarity"]',     '리전이 바이옴을 고를 때의 가중치. 가중치=1/rarity 라 값이 클수록 드물게 등장합니다(1=가장 흔함, 범위 1~512).'],
+      ['label[for="bcolor"]',     'Iris 스튜디오 미리보기 지도에서 이 바이옴을 칠하는 색. 실제 플레이엔 영향이 없습니다.'],
+      ['label[for="layerAdd"]',   '표면부터 아래로 쌓이는 재질 층. 각 층을 두께 min~max(블록)만큼 채우고, 합보다 깊은 곳은 디멘션 기반암(stone)이 채웁니다.'],
+      ['label[for="hmin"]',       '이 바이옴 지형의 최저 높이. 노이즈 출력(0~1)을 높이=lerp(min,max,노이즈)로 매핑합니다(해수면 기준 상대값).'],
+      ['label[for="hmax"]',       '이 바이옴 지형의 최고 높이. 노이즈가 1에 가까울수록 이 높이에 도달합니다.'],
+      ['#lblNoise',               '지형의 기본 노이즈 알고리즘·형태. Simplex=완만한 언덕, Cellular=구역, Billow=뭉게구름, Ridged=날카로운 능선 등.'],
+      ['label[for="zoom"]',       '지형 스케일. 값이 클수록 확대되어 특징이 크고 완만해지고, 작을수록 잘고 촘촘해집니다.'],
+      ['label[for="octaves"]',    '줌이 다른 노이즈를 여러 겹 겹쳐 디테일을 더합니다(프랙탈). 많을수록 잔굴곡이 늘고, 보통 6 이하를 권장합니다.'],
+      ['label[for="exponent"]',   '출력에 noise^exp 적용. >1이면 낮고 평평한 지대가 넓어지고 봉우리는 뾰족·드물어지며, <1이면 고원·봉우리가 많아집니다.'],
+      ['label[for="fracture"]',   '다른 노이즈로 입력 좌표를 왜곡(도메인 워핑)해 격자감을 없애고 구불구불·유기적인 지형을 만듭니다. 값이 왜곡 강도입니다.'],
+      ['label[for="size"]',       '렌더링할 정사각 영역의 한 변(블록 수). 미리보기 전용 — export에 포함되지 않습니다.'],
+      ['label[for="time"]',       '태양 각도(낮/밤)를 조절합니다. 미리보기 전용 — export에 포함되지 않습니다.'],
+      ['label[for="shader"]',     '그림자·조명 프리셋. 미리보기 전용 — export에 포함되지 않습니다.'],
+    ];
+    function addTips() {
+      for (const [sel, text] of TIPS) {
+        const label = document.querySelector(sel);
+        if (!label || label.querySelector('.info')) continue;
+        const ic = document.createElement('span');
+        ic.className = 'info'; ic.textContent = 'i'; ic.tabIndex = 0;
+        ic.setAttribute('role', 'img'); ic.setAttribute('aria-label', '설명: ' + text);
+        const show = () => { tipBox.textContent = text; tipBox.hidden = false; placeTip(ic); };
+        const hide = () => { tipBox.hidden = true; };
+        ic.addEventListener('mouseenter', show);
+        ic.addEventListener('mouseleave', hide);
+        ic.addEventListener('focus', show);
+        ic.addEventListener('blur', hide);
+        label.insertBefore(ic, label.firstChild);   // first child -> floats to the far right
+      }
+    }
+
+    populateStyles(); renderLayers(); addTips(); rebuild(); applyTime(); applyShader(); resize();
     (function loop() {
       requestAnimationFrame(loop);
       controls.update();

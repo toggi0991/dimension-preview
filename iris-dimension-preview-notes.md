@@ -50,12 +50,11 @@
   - deepslate는 worldgen JSON 기반이라 이번 폼-드리븐 방식엔 당장 안 씀. 향후 지형 생성 고도화 시 재검토.
 
 ## 4. TODO (다음 단계)
-- [ ] **biome input 추가** — min/max뿐 아니라 바이옴 자체 입력(이름·derivative·layers/palette·rarity·
-      generators 링크 등)을 폼에 넣어 바이옴 단위로 구성 가능하게.
-- [ ] **아코디언 UI로 입력 분리** — `biome input` 섹션과 `generator input` 섹션을 접었다 펴는
-      아코디언으로 나눠서 폼 정리.
-- [ ] **내보내기 탭 분리** — export 모달 상단에 `biome 코드` / `generator 코드`를 클릭 전환(탭)해
-      각각 복사할 수 있게. (지금은 generator JSON 하나만 나옴)
+- [x] **biome input 추가** — 이름·derivative·rarity·color + 팔레트 레이어 편집기(블록·두께 min/max)
+      + 높이 min/max를 바이옴 아코디언에 넣음. (2026-07-28 완료)
+- [x] **아코디언 UI로 입력 분리** — 바이옴 / 제너레이터 / 미리보기 3개 `<details>` 아코디언. (완료)
+- [x] **내보내기 탭 분리** — export 모달에 `biome 코드` / `generator 코드` 탭. buildBiomeJSON /
+      buildExportJSON 각각 출력, 복사는 활성 탭 기준. (완료)
 - [ ] **[보류]** 완전한 Iris 팩(dimension+region+biome 폴더 구조)으로 감싸 ZIP 다운로드
       → 게임에 바로 적용. *보류 사유(2026-07-27): 아직 필요성 못 느낌. 현재는 generator JSON 복사로 충분.*
 - [ ] 실제 블록 텍스처 에셋 확보 및 라이선스 확인 (플레이스홀더 → 텍스처)
@@ -194,3 +193,26 @@ FastNoiseLite FBm vs Iris식 클래식-심플렉스 FBM(옥타브4·gain0.5·lac
 - **우리 툴 버그**: export가 `opacity: Height슬라이더값`(23,31)을 냈음 → 포화 유발.
 - **수정**: export **`opacity: 1` 고정**. 실제 높이는 바이옴 min/max 소관. (Height 슬라이더는 미리보기 전용.)
 - ✅ 이게 스케일/진폭보다 상위 원인. 스케일·진폭 보정도 유효하지만 이 opacity가 진짜 범인이었음.
+
+## 8. IrisBiome 스키마 (소스 조사, 2026-07-28)
+출처: `VolmitSoftware/Iris` 소스 `IrisBiome.java` / `IrisBiomePaletteLayer.java` / `IrisBiomeGeneratorLink.java`.
+
+**우리 툴이 쓰는 핵심 필드**
+- `name`(String), `rarity`(1~512, 클수록 희귀), `derivative`(**필수** 바닐라 Biome enum, 예 `PLAINS`),
+  `color`(hex, 스튜디오 시각화용).
+- `layers`(List) — 표면→깊이 재질. **레이어 하나 = `{ palette:[블록id...], minHeight, maxHeight }`**.
+  minHeight/maxHeight = 그 레이어 **두께**(0~2032). 그 밑은 디멘션 기반암(rock, 보통 stone)이 채움.
+- `generators`(List) — **`{ generator:<id>, min, max }`**. min/max = **value + fluidHeight**(해수면 기준).
+  `IrisBiomeGeneratorLink.getHeight`: 생성기 출력 clamp(0,1) → `lerp(min,max,g)`. (7장 참조)
+
+**팔레트 블록 id**: 마인크래프트 id 문자열(`grass_block`,`dirt`,`stone`,`end_stone`…). 우리 UI 키→id는 `mcId()`.
+
+**미구현/프리뷰 밖 필드**(참고): `slab`,`wall`,`seaLayers`,`caveCeilingLayers`,`lockLayers`,
+`decorators`,`objects`,`deposits`,`ores`,`carving`,`fluidBodies`,`jigsawStructures`,`loot`,`effects`,
+`children`/`childStyle`/`childShrinkFactor`,`biomeScatter`/`biomeSkyScatter`(파생색 변주).
+
+**툴 반영(2026-07-28)**: 바이옴 아코디언에 name/derivative/rarity/color + 레이어 편집기.
+렌더는 `layerBlockAt(x,z,depth)`가 레이어 두께를 컬럼별 `hash01`로 변주해 표면부터 블록을 쌓고,
+레이어 합 아래는 `BASE_ROCK='stone'`. derivative는 `GRASS_TINT`로 잔디 top색에 반영.
+export `buildBiomeJSON`이 `layers[].minHeight/maxHeight` + `generators:[{generator:'terrain',min,max}]` 출력.
+- ⚠️ 단순화: 프리뷰의 "레이어 밑 stone"은 실제 Iris에선 **디멘션 rockPalette** 소관(바이옴 레이어 아님).

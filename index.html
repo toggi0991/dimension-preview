@@ -85,11 +85,14 @@
   .decor-cols, .decor {
     display: grid; grid-template-columns: 1fr 46px 38px 38px 22px; gap: 6px; align-items: center;
   }
-  .layer-cols, .decor-cols { font-size: 10px; color: var(--muted); margin-bottom: 4px; padding: 0 2px; }
-  .layer, .decor { margin-bottom: 6px; }
+  .object-cols, .object {
+    display: grid; grid-template-columns: 1fr 50px 44px 22px; gap: 6px; align-items: center;
+  }
+  .layer-cols, .decor-cols, .object-cols { font-size: 10px; color: var(--muted); margin-bottom: 4px; padding: 0 2px; }
+  .layer, .decor, .object { margin-bottom: 6px; }
   .layer select, .decor select { padding: 6px; font-size: 12px; }
-  .layer input[type=number], .decor input[type=number] { padding: 6px; text-align: center; }
-  .decor input[type=text] { padding: 6px; font-size: 12px; }
+  .layer input[type=number], .decor input[type=number], .object input[type=number] { padding: 6px; text-align: center; }
+  .decor input[type=text], .object input[type=text] { padding: 6px; font-size: 12px; }
   .layer-del {
     background: none; border: none; color: var(--muted); font-size: 18px; line-height: 1;
     cursor: pointer; padding: 0;
@@ -268,6 +271,16 @@
           <div id="decorList"></div>
           <datalist id="decorBlockList"></datalist>
           <p class="layer-note">표면 위에 잔디·꽃·선인장 등을 확률(0~1)로 배치. min~max는 세로 스택 높이. 앞 항목이 우선.</p>
+        </div>
+
+        <div class="field">
+          <div class="layer-head">
+            <label style="margin:0" for="objectAdd">오브젝트 (Objects · 스키매틱)</label>
+            <button type="button" class="layer-add" id="objectAdd">+ 오브젝트</button>
+          </div>
+          <div class="object-cols"><span>이름 (.iob)</span><span>확률</span><span>밀도</span><span></span></div>
+          <div id="objectList"></div>
+          <p class="layer-note">objects/ 폴더의 .iob 스키매틱 배치. 이름은 <b>확장자(.iob) 없이</b> — 하위 폴더는 슬래시(예: trees/oak_big), 다른 팩은 pack:object. 실제 형태는 미리보기 불가라 위치 마커(◆)만 표시됩니다.</p>
         </div>
 
         <div class="field">
@@ -616,6 +629,37 @@
       }));
       list.querySelectorAll('.layer-del').forEach(b => b.addEventListener('click', () => {
         decorators.splice(+b.dataset.i, 1); renderDecorators(); rebuild();
+      }));
+    }
+
+    // --- Objects (IrisObjectPlacement): external .iob schematics placed on the
+    // surface. The real schematic can't be rendered here (it's a separate file), so
+    // preview shows a placeholder marker post where one would spawn. ---
+    let objects = [];
+    const OBJECT_MARK = 0xcaa24a;   // placeholder marker color
+
+    function renderObjects(){
+      const list = document.getElementById('objectList');
+      list.innerHTML = '';
+      objects.forEach((o, i) => {
+        const row = document.createElement('div');
+        row.className = 'object';
+        row.innerHTML =
+          `<input type="text" data-i="${i}" data-k="name" value="${o.name}" placeholder="예: trees/oak (확장자 없이)" title="objects/…/NAME.iob 에서 .iob를 뺀 이름" />` +
+          `<input type="number" data-i="${i}" data-k="chance" min="0" max="1" step="0.01" value="${o.chance}" title="청크당 배치 확률 0~1" />` +
+          `<input type="number" data-i="${i}" data-k="density" min="1" max="32" value="${o.density}" title="한 번에 배치 개수" />` +
+          `<button type="button" class="layer-del" data-i="${i}" title="삭제">×</button>`;
+        list.appendChild(row);
+      });
+      list.querySelectorAll('input').forEach(el => el.addEventListener('change', () => {
+        const i = +el.dataset.i, k = el.dataset.k;
+        if (k === 'name') objects[i].name = el.value.trim();
+        else if (k === 'chance') objects[i].chance = Math.max(0, Math.min(1, parseFloat(el.value) || 0));
+        else objects[i].density = Math.max(1, parseInt(el.value, 10) || 1);
+        rebuild();
+      }));
+      list.querySelectorAll('.layer-del').forEach(b => b.addEventListener('click', () => {
+        objects.splice(+b.dataset.i, 1); renderObjects(); rebuild();
       }));
     }
 
@@ -1014,6 +1058,18 @@
         }
       };
 
+      // Place a placeholder marker post where an object (.iob schematic) would spawn.
+      const objMarkCol = new THREE.Color(OBJECT_MARK);
+      const emitObjectMark = (x, z, h) => {
+        for (let i = 0; i < objects.length; i++) {
+          const o = objects[i];
+          if (!o.name || hash01(x, z, 300 + i) >= o.chance) continue;
+          emitBox(x + 0.5, (h + 1) + 1.4, z + 0.5, 0.28, 1.4, 0.28, objMarkCol, P, N, C);
+          faceCount += 6;
+          return;
+        }
+      };
+
       // Build ONE merged geometry holding only air-exposed faces (hidden faces culled).
       const P = [], N = [], C = [];
       let blockCount = 0, faceCount = 0;
@@ -1030,6 +1086,7 @@
             }
           }
           emitDecorator(x, z, h);   // grass / flowers / cacti on the surface
+          emitObjectMark(x, z, h);  // placeholder marker for .iob object placements
         }
       }
 
@@ -1153,6 +1210,17 @@
           return dec;
         });
       }
+
+      // IrisObjectPlacement entries (skip blank names). `place` is the object name(s)
+      // WITHOUT the .iob extension; density only when placing more than one.
+      const objs = objects.filter(o => o.name);
+      if (objs.length) {
+        biome.objects = objs.map(o => {
+          const op = { place: [ o.name ], chance: o.chance };
+          if (o.density > 1) op.density = o.density;
+          return op;
+        });
+      }
       return JSON.stringify(biome, null, 2);
     }
 
@@ -1216,6 +1284,11 @@
     document.getElementById('decorAdd').addEventListener('click', () => {
       decorators.push({ block: 'poppy', chance: 0.05, stackMin: 1, stackMax: 1 });
       renderDecorators(); rebuild();
+    });
+    // Add a new object placement (blank name until the user fills it in)
+    document.getElementById('objectAdd').addEventListener('click', () => {
+      objects.push({ name: '', chance: 0.1, density: 1 });
+      renderObjects(); rebuild();
     });
     // Custom style dropdown: toggle open, hover-preview, revert on leave, commit on click
     document.getElementById('styleButton').addEventListener('click', (e) => {
@@ -1290,6 +1363,7 @@
       ['label[for="bcolor"]',     'Iris 스튜디오 미리보기 지도에서 이 바이옴을 칠하는 색. 실제 플레이엔 영향이 없습니다.'],
       ['label[for="layerAdd"]',   '표면부터 아래로 쌓이는 재질 층. 각 층을 두께 min~max(블록)만큼 채우고, 합보다 깊은 곳은 디멘션 기반암(stone)이 채웁니다.'],
       ['label[for="decorAdd"]',   '표면 위 식생(잔디·꽃·선인장 등). 각 항목을 확률(0~1)로 배치하고, min~max는 세로 스택 높이입니다. 목록에서 앞선 항목이 우선합니다.'],
+      ['label[for="objectAdd"]',  'objects/ 폴더의 .iob 스키매틱(나무·바위·건물 등)을 배치. 이름은 확장자(.iob) 없이 적습니다. 하위 폴더는 슬래시(예: trees/oak_big), 다른 팩 참조는 pack:object. chance=청크당 배치 확률, density=한 번에 배치 개수. 실제 형태는 미리보기 불가(위치 마커만 표시).'],
       ['label[for="hmin"]',       '이 바이옴 지형의 최저 높이. 노이즈 출력(0~1)을 높이=lerp(min,max,노이즈)로 매핑합니다(해수면 기준 상대값).'],
       ['label[for="hmax"]',       '이 바이옴 지형의 최고 높이. 노이즈가 1에 가까울수록 이 높이에 도달합니다.'],
       ['#lblNoise',               '지형의 기본 노이즈 알고리즘·형태. Simplex=완만한 언덕, Cellular=구역, Billow=뭉게구름, Ridged=날카로운 능선 등.'],
@@ -1318,7 +1392,7 @@
       }
     }
 
-    populateStyles(); renderLayers(); renderDecorators(); addTips(); rebuild(); applyTime(); applyShader(); resize();
+    populateStyles(); renderLayers(); renderDecorators(); renderObjects(); addTips(); rebuild(); applyTime(); applyShader(); resize();
     (function loop() {
       requestAnimationFrame(loop);
       controls.update();

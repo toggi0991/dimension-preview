@@ -59,6 +59,10 @@
 - [x] **range 실시간 렌더** — 모든 슬라이더 `input`→`requestRebuild`(rAF로 프레임당 1회). (2026-07-28)
 - [x] **decorators(표면 식생)** — 데코레이터 편집기(블록·확률·스택) + 프리뷰 마커(emitBox) +
       biome export `decorators[]`. 잔디·꽃=얇은 마커, cactus/cane/bamboo=기둥. (2026-07-28)
+      블록 자동완성 datalist를 바닐라 60종으로 확장, 블록칸은 자유 text 입력.
+- [x] **objects(스키매틱 배치)** — 오브젝트 편집기(이름 text·확률·밀도) + info 툴팁(이름은 .iob
+      확장자 없이, 폴더는 슬래시, 타팩은 pack:object) + export `objects[]{place,chance,density}`.
+      실제 .iob는 렌더 불가라 위치 마커(◆ post)만 표시. (2026-07-28)
 - [ ] **[보류]** 완전한 Iris 팩(dimension+region+biome 폴더 구조)으로 감싸 ZIP 다운로드
       → 게임에 바로 적용. *보류 사유(2026-07-27): 아직 필요성 못 느낌. 현재는 generator JSON 복사로 충분.*
 - [ ] 실제 블록 텍스처 에셋 확보 및 라이선스 확인 (플레이스홀더 → 텍스처)

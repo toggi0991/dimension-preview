@@ -229,3 +229,46 @@ FastNoiseLite FBm vs Iris식 클래식-심플렉스 FBM(옥타브4·gain0.5·lac
 레이어 합 아래는 `BASE_ROCK='stone'`. derivative는 `GRASS_TINT`로 잔디 top색에 반영.
 export `buildBiomeJSON`이 `layers[].minHeight/maxHeight` + `generators:[{generator:'terrain',min,max}]` 출력.
 - ⚠️ 단순화: 프리뷰의 "레이어 밑 stone"은 실제 Iris에선 **디멘션 rockPalette** 소관(바이옴 레이어 아님).
+
+## 9. 디멘션 파일 구조 (소스 + 실제 팩 조사, 2026-08-02)
+출처: `IrisDimension.java` / `IrisRegion.java` 소스 + 실제 팩 `IrisDimensions/overworld` 폴더 트리.
+
+**팩 폴더 구조** (각 폴더 이름 = 리소스 타입 복수형, 참조는 확장자 없는 파일명)
+```
+<pack>/
+├── dimensions/   *.json   ← 최상위. /iris create world type=<파일명> 이 로드
+├── regions/      *.json
+├── biomes/       *.json          (우리 툴이 생성)
+├── generators/   *.json          (우리 툴이 생성)
+├── objects/      *.iob           ← 유일하게 .iob 확장자(스키매틱)
+├── jigsaw-pieces/ jigsaw-pools/ structures/   구조물
+├── entities/  spawners/          몹
+├── loot/                         루트 테이블
+├── snippet/                      재사용 조각
+└── images/                       이미지맵 등
+```
+참조 규칙: 이름은 **확장자 없이**, 하위 폴더는 슬래시(예: `trees/oak`), 타팩은 `pack:name`.
+
+**조립(참조) 체인**: `Dimension → regions[] → (land/sea/shore/cave)Biomes[] → generators[]{generator,min,max} + decorators[] + objects[]{place}`
+
+**IrisDimension 핵심 필드**
+- `regions`(**필수**) — region 파일명 목록. `mode`(필수, 생성 모드).
+- `dimensionHeight` {min,max} Y (기본 -64~320). `fluidHeight`(해수면, 기본 63).
+- 스케일: `landZoom`·`seaZoom`·`biomeZoom`·`regionZoom` (클수록 큼).
+- 배치 스타일: `regionStyle`·`landBiomeStyle`·`seaBiomeStyle`·`caveBiomeStyle`.
+- 재질: `rockPalette`(기본 stone)·`fluidPalette`(기본 water). ← **바이옴 레이어 밑을 채우는 그 rock**(8장 ⚠️).
+- 선택: `stronghold`·`jigsawStructures`·`loot`·`entitySpawners`.
+
+**IrisRegion 핵심 필드**
+- `landBiomes`·`seaBiomes`·`shoreBiomes`·`caveBiomes` — biome 파일명 목록(**root 부모만**, child는 biome 계층에서 재귀 발견).
+- `rarity`(1~128), `landBiomeZoom`·`seaBiomeZoom`·`shoreBiomeZoom`·`caveBiomeZoom`.
+
+**최소 동작 예시**
+```
+dimensions/example.json : { "regions":["plains_region"], "dimensionHeight":{"min":-64,"max":320},
+                            "fluidHeight":63, "rockPalette":["stone"], "fluidPalette":["water"] }
+regions/plains_region.json : { "name":"Plains", "rarity":1, "landBiomes":["custom_biome"] }
+biomes/custom_biome.json   : (우리 툴 export)
+generators/terrain.json    : (우리 툴 export)
+```
+→ 헬퍼는 이 **dimension+region 계층**을 조립해 biome/generator 참조를 연결하는 역할.

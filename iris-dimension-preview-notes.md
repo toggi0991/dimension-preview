@@ -66,8 +66,9 @@
 - [ ] **디멘션 파일 구조 파악하기** — Iris 디멘션(dimensions/….json)이 region/biome/generator/
       objects 등을 어떻게 참조·조립하는지, 팩 폴더 구조(dimensions·regions·biomes·generators·objects…)와
       필수/선택 필드 조사. (IrisDimension·IrisRegion 소스 + 공식 문서)
-- [ ] **디멘션 파일 구성 헬퍼(새 페이지)** — 별도 페이지를 만들어 위에서 파악한 구조대로
-      디멘션 파일을 조립하는 헬퍼. (biome/generator/region 참조 연결, 팩 폴더 구조 안내/생성)
+- [~] **디멘션 파일 구성 헬퍼(새 페이지)** — 1차: `dimension-helper.html` 스케치 보드 완성(2026-08-02).
+      Dimension→Region→Biome 트리 편집(이름·메모·generators/objects 참조), 개요 복사, localStorage 자동저장.
+      *아직 유효 JSON 생성·검증은 안 함(아이디어 정리용).* 향후: 실제 dimension/region JSON export.
 - [ ] **[보류]** 완전한 Iris 팩(dimension+region+biome 폴더 구조)으로 감싸 ZIP 다운로드
       → 게임에 바로 적용. *보류 사유(2026-07-27): 아직 필요성 못 느낌. 현재는 generator JSON 복사로 충분.*
 - [ ] 실제 블록 텍스처 에셋 확보 및 라이선스 확인 (플레이스홀더 → 텍스처)

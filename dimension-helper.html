@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dimension Helper — Iris 팩 구조 스케치</title>
+<style>
+  :root {
+    --bg: #14161c; --panel: #1d2029; --panel-2: #262a35; --line: #333949;
+    --text: #e6e8ef; --muted: #9aa0b0;
+    --accent: #5bc46b;               /* biome green (matches preview tool) */
+    --dim: #c8a24a;                  /* dimension gold */
+    --region: #5f7fd6;               /* region blue */
+    --biome: #5bc46b;                /* biome green */
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, "Segoe UI", sans-serif; line-height: 1.5;
+    padding: 24px; max-width: 980px; margin: 0 auto;
+  }
+  a { color: var(--accent); }
+
+  header h1 { font-size: 20px; margin: 0 0 4px; }
+  header .sub { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+
+  /* Reference-chain legend */
+  .chain {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; margin-bottom: 8px; font-size: 12px;
+  }
+  .chain .node { padding: 3px 9px; border-radius: 5px; font-weight: 600; }
+  .chain .arrow { color: var(--muted); }
+  .chain .d { background: rgba(200,162,74,.18); color: var(--dim); }
+  .chain .r { background: rgba(95,127,214,.18); color: var(--region); }
+  .chain .b { background: rgba(91,196,107,.18); color: var(--biome); }
+  .chain .g { background: var(--panel-2); color: var(--muted); }
+  .hint { color: var(--muted); font-size: 12px; margin: 0 0 16px; }
+
+  /* Toolbar */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px; align-items: center; }
+  button {
+    background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 8px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #0b1a0e; border-color: var(--accent); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  .saved { color: var(--muted); font-size: 12px; margin-left: auto; }
+
+  /* Cards */
+  .card { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px;
+          background: var(--panel); padding: 12px 14px; margin-bottom: 12px; }
+  .card.dim    { border-left-color: var(--dim); }
+  .card.region { border-left-color: var(--region); background: var(--panel-2); }
+  .card.biome  { border-left-color: var(--biome); background: #21252f; }
+  .card-head { display: flex; align-items: center; gap: 8px; }
+  .tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+         padding: 2px 7px; border-radius: 4px; flex: none; }
+  .tag.d { background: rgba(200,162,74,.18); color: var(--dim); }
+  .tag.r { background: rgba(95,127,214,.18); color: var(--region); }
+  .tag.b { background: rgba(91,196,107,.18); color: var(--biome); }
+
+  input[type=text], textarea {
+    width: 100%; background: var(--bg); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; font: inherit;
+  }
+  input.name { font-weight: 600; }
+  textarea { resize: vertical; min-height: 34px; font-size: 12px; color: var(--muted); }
+  .fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+  .fields label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 3px; }
+  .row-mini { margin-top: 8px; }
+  .children { margin: 10px 0 2px 14px; padding-left: 12px; border-left: 1px dashed var(--line); }
+  .del { flex: none; background: none; border: none; color: var(--muted); font-size: 18px;
+         line-height: 1; padding: 2px 6px; cursor: pointer; }
+  .del:hover { color: #e06a6a; }
+  .add {
+    background: var(--panel-2); color: var(--muted); border: 1px dashed var(--line);
+    border-radius: 6px; padding: 6px 12px; font-size: 12px; cursor: pointer; margin-top: 8px;
+  }
+  .add:hover { color: var(--text); border-color: var(--muted); }
+
+  .empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center;
+           border: 1px dashed var(--line); border-radius: 8px; }
+
+  /* Outline modal */
+  .modal-overlay { position: fixed; inset: 0; z-index: 100; background: rgba(0,0,0,.55);
+                   display: flex; align-items: center; justify-content: center; }
+  .modal-overlay[hidden] { display: none; }
+  .modal { width: min(720px, 90%); max-height: 80%; display: flex; flex-direction: column;
+           background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .modal-head { display: flex; justify-content: space-between; align-items: center;
+                padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .modal-head h2 { margin: 0; font-size: 15px; }
+  .modal-body { padding: 14px 16px; overflow: auto; }
+  .modal pre { margin: 0; background: #0e1015; border: 1px solid var(--line); border-radius: 8px;
+               padding: 14px; overflow: auto; }
+  .modal code { font-family: ui-monospace, Consolas, monospace; font-size: 12.5px; color: #d6dbe6; white-space: pre; }
+  footer { color: var(--muted); font-size: 12px; margin-top: 24px; border-top: 1px solid var(--line); padding-top: 12px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>Dimension Helper</h1>
+    <p class="sub">Iris 팩의 파일 참조 구조를 가볍게 스케치하는 보드입니다. (<a href="index.html">← 미리보기 툴로</a>)</p>
+    <div class="chain">
+      <span class="node d">Dimension</span><span class="arrow">→</span>
+      <span class="node r">Regions</span><span class="arrow">→</span>
+      <span class="node b">Biomes</span><span class="arrow">→</span>
+      <span class="node g">generators · objects</span>
+    </div>
+    <p class="hint">각 노드에 이름·메모를 적어 “무엇이 무엇을 참조하는지”만 정리하세요. 이름은 파일명(확장자 없이) 기준. 실제 파일 생성·검증은 안 하며, 내용은 이 브라우저에 자동 저장됩니다.</p>
+  </header>
+
+  <div class="toolbar">
+    <button class="primary" id="addDim">+ 디멘션</button>
+    <button id="copyOutline">개요 복사</button>
+    <button id="resetAll">초기화</button>
+    <span class="saved" id="saved"></span>
+  </div>
+
+  <div id="board"></div>
+
+  <div id="outlineModal" class="modal-overlay" hidden>
+    <div class="modal">
+      <div class="modal-head">
+        <h2>구조 개요 (Outline)</h2>
+        <button class="del" id="closeOutline" aria-label="Close" style="font-size:22px">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint" style="margin-top:0">아래를 복사해 메모·이슈에 붙여넣으세요.</p>
+        <pre><code id="outlineText"></code></pre>
+        <button class="primary" id="copyOutline2" style="margin-top:12px">클립보드로 복사</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    ⚠️ 스케치 전용 도구입니다 — 유효한 Iris JSON을 생성하지 않습니다. 참조 규칙: 이름은 확장자 없이,
+    하위 폴더는 슬래시(예: <code>trees/oak</code>), 다른 팩은 <code>pack:name</code>.
+    폴더 구조: <code>dimensions/ regions/ biomes/ generators/ objects/(.iob)</code>.
+  </footer>
+
+<script>
+  const KEY = 'iris-dim-helper-v1';
+  const uid = () => Math.random().toString(36).slice(2, 9);
+
+  // Default sketch mirrors the minimal working example from the notes.
+  const DEFAULT = {
+    dimensions: [{
+      id: uid(), name: 'example', memo: 'dimensionHeight -64~320 · fluidHeight 63 · rockPalette stone',
+      regions: [{
+        id: uid(), name: 'plains_region', memo: 'rarity 1',
+        biomes: [{ id: uid(), name: 'custom_biome', gens: 'terrain', objs: '', memo: '' }],
+      }],
+    }],
+  };
+
+  let state = load();
+  function load() {
+    try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.dimensions) return s; } catch {}
+    return structuredClone(DEFAULT);
+  }
+  let saveTimer = null;
+  function save() {
+    localStorage.setItem(KEY, JSON.stringify(state));
+    const el = document.getElementById('saved');
+    el.textContent = '저장됨 ✓';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => (el.textContent = ''), 1200);
+  }
+
+  // --- small builders (attach listeners that mutate state without re-rendering) ---
+  function textInput(obj, key, ph, cls) {
+    const i = document.createElement('input');
+    i.type = 'text'; i.value = obj[key] || ''; i.placeholder = ph || ''; if (cls) i.className = cls;
+    i.addEventListener('input', () => { obj[key] = i.value; save(); });
+    return i;
+  }
+  function memoInput(obj) {
+    const t = document.createElement('textarea');
+    t.value = obj.memo || ''; t.placeholder = '메모 (선택)'; t.rows = 1;
+    t.addEventListener('input', () => { obj.memo = t.value; save(); });
+    return t;
+  }
+  function delBtn(arr, node) {
+    const b = document.createElement('button');
+    b.className = 'del'; b.textContent = '×'; b.title = '삭제';
+    b.addEventListener('click', () => { arr.splice(arr.indexOf(node), 1); render(); save(); });
+    return b;
+  }
+  function addBtn(label, fn) {
+    const b = document.createElement('button');
+    b.className = 'add'; b.textContent = label;
+    b.addEventListener('click', () => { fn(); render(); save(); });
+    return b;
+  }
+  function head(tagCls, tagText, obj, arr, node) {
+    const h = document.createElement('div'); h.className = 'card-head';
+    const tag = document.createElement('span'); tag.className = 'tag ' + tagCls; tag.textContent = tagText;
+    h.append(tag, textInput(obj, 'name', tagText + ' 파일명', 'name'), delBtn(arr, node));
+    return h;
+  }
+
+  function biomeCard(b, arr) {
+    const c = document.createElement('div'); c.className = 'card biome';
+    c.appendChild(head('b', 'Biome', b, arr, b));
+    const f = document.createElement('div'); f.className = 'fields';
+    const g = document.createElement('div'), o = document.createElement('div');
+    g.innerHTML = '<label>generators (참조)</label>'; g.appendChild(textInput(b, 'gens', '예: terrain'));
+    o.innerHTML = '<label>objects (참조)</label>'; o.appendChild(textInput(b, 'objs', '예: trees/oak'));
+    f.append(g, o); c.appendChild(f);
+    const m = document.createElement('div'); m.className = 'row-mini'; m.appendChild(memoInput(b)); c.appendChild(m);
+    return c;
+  }
+  function regionCard(r, arr) {
+    const c = document.createElement('div'); c.className = 'card region';
+    c.appendChild(head('r', 'Region', r, arr, r));
+    c.appendChild(memoInput(r));
+    const kids = document.createElement('div'); kids.className = 'children';
+    (r.biomes ||= []).forEach(b => kids.appendChild(biomeCard(b, r.biomes)));
+    c.appendChild(kids);
+    c.appendChild(addBtn('+ 바이옴', () => r.biomes.push({ id: uid(), name: '', gens: '', objs: '', memo: '' })));
+    return c;
+  }
+  function dimCard(d, arr) {
+    const c = document.createElement('div'); c.className = 'card dim';
+    c.appendChild(head('d', 'Dimension', d, arr, d));
+    c.appendChild(memoInput(d));
+    const kids = document.createElement('div'); kids.className = 'children';
+    (d.regions ||= []).forEach(r => kids.appendChild(regionCard(r, d.regions)));
+    c.appendChild(kids);
+    c.appendChild(addBtn('+ 리전', () => d.regions.push({ id: uid(), name: '', memo: '', biomes: [] })));
+    return c;
+  }
+
+  function render() {
+    const board = document.getElementById('board');
+    board.innerHTML = '';
+    if (!state.dimensions.length) {
+      const e = document.createElement('div'); e.className = 'empty';
+      e.textContent = '아직 없음 — "+ 디멘션"으로 시작하세요.';
+      board.appendChild(e); return;
+    }
+    state.dimensions.forEach(d => board.appendChild(dimCard(d, state.dimensions)));
+  }
+
+  // --- outline text ---
+  function outline() {
+    const L = [];
+    for (const d of state.dimensions) {
+      L.push(`# Dimension: ${d.name || '(이름 없음)'}${d.memo ? '  — ' + d.memo : ''}`);
+      for (const r of (d.regions || [])) {
+        L.push(`  - Region: ${r.name || '(이름 없음)'}${r.memo ? '  — ' + r.memo : ''}`);
+        for (const b of (r.biomes || [])) {
+          const refs = [b.gens && `gen: ${b.gens}`, b.objs && `obj: ${b.objs}`].filter(Boolean).join('; ');
+          L.push(`    - Biome: ${b.name || '(이름 없음)'}${refs ? '  (' + refs + ')' : ''}${b.memo ? '  — ' + b.memo : ''}`);
+        }
+      }
+      L.push('');
+    }
+    return L.join('\n').trim() || '(비어 있음)';
+  }
+  async function copyText(text, btn) {
+    try { await navigator.clipboard.writeText(text); }
+    catch { const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove(); }
+    if (btn) { const p = btn.textContent; btn.textContent = '복사됨! ✓'; setTimeout(() => (btn.textContent = p), 1200); }
+  }
+
+  // --- wiring ---
+  document.getElementById('addDim').addEventListener('click', () => {
+    state.dimensions.push({ id: uid(), name: '', memo: '', regions: [] }); render(); save();
+  });
+  document.getElementById('copyOutline').addEventListener('click', () => {
+    document.getElementById('outlineText').textContent = outline();
+    document.getElementById('outlineModal').hidden = false;
+  });
+  document.getElementById('copyOutline2').addEventListener('click', (e) => copyText(outline(), e.target));
+  document.getElementById('closeOutline').addEventListener('click', () => document.getElementById('outlineModal').hidden = true);
+  document.getElementById('outlineModal').addEventListener('click', (e) => { if (e.target.id === 'outlineModal') e.currentTarget.hidden = true; });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.getElementById('outlineModal').hidden = true; });
+  document.getElementById('resetAll').addEventListener('click', () => {
+    if (confirm('모든 스케치를 지우고 기본 예시로 되돌릴까요?')) { state = structuredClone(DEFAULT); render(); save(); }
+  });
+
+  render();
+</script>
+</body>
+</html>

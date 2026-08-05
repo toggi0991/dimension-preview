@@ -83,8 +83,28 @@
     display: grid; grid-template-columns: 1fr 48px 48px 22px; gap: 6px; align-items: center;
   }
   .decor-cols, .decor {
-    display: grid; grid-template-columns: 1fr 46px 38px 38px 22px; gap: 6px; align-items: center;
+    display: grid; grid-template-columns: 20px 1fr 44px 36px 36px 20px; gap: 6px; align-items: center;
   }
+  /* per-decorator color swatch (left of the block) */
+  .swatch { width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--line);
+    padding: 0; cursor: pointer; }
+  .swatch:hover { outline: 1px solid var(--accent); }
+  /* occupancy bar + preset-color popover */
+  .decor-bar { display: flex; height: 14px; margin: 8px 0 2px; border: 1px solid var(--line);
+    border-radius: 4px; overflow: hidden; background: var(--panel-2); }
+  .decor-bar .seg { height: 100%; min-width: 0; }
+  .decor-bar .seg.ground {
+    background: repeating-linear-gradient(45deg, #2a2f3a 0 4px, #313746 4px 8px);
+  }
+  .swatch-pop { position: fixed; z-index: 1000; display: grid; grid-template-columns: repeat(6, 20px);
+    gap: 6px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .swatch-pop[hidden] { display: none; }
+  .swatch-pop button { width: 20px; height: 20px; border-radius: 4px; border: 1px solid var(--line);
+    padding: 0; cursor: pointer; }
+  .swatch-pop button:hover { outline: 1px solid var(--accent); }
+  .swatch-pop .auto { grid-column: 1 / -1; width: auto; height: auto; font-size: 11px;
+    color: var(--muted); padding: 4px 6px; background: var(--panel); }
   .object-cols, .object {
     display: grid; grid-template-columns: 1fr 50px 44px 22px; gap: 6px; align-items: center;
   }
@@ -268,8 +288,9 @@
             <label style="margin:0" for="decorAdd">데코레이터 (Decorators · 표면 식생)</label>
             <button type="button" class="layer-add" id="decorAdd">+ 데코</button>
           </div>
-          <div class="decor-cols"><span>블록</span><span>확률</span><span>min</span><span>max</span><span></span></div>
+          <div class="decor-cols"><span></span><span>블록</span><span>확률</span><span>min</span><span>max</span><span></span></div>
           <div id="decorList"></div>
+          <div id="decorBar" class="decor-bar" title="확률 기반 점유율(선착순 배치)"></div>
           <datalist id="decorBlockList"></datalist>
           <p class="layer-note">표면 위에 잔디·꽃·선인장 등을 확률(0~1)로 배치. min~max는 세로 스택 높이. 앞 항목이 우선.</p>
         </div>
@@ -590,9 +611,77 @@
       small_dripleaf:    { label:'Small Dripleaf',    color:0x5f9040 },
     };
     // Earlier decorators have priority (first whose per-column chance passes wins).
+    // `color` overrides the auto block color (for the swatch, occupancy bar & 3D marker).
     let decorators = [
-      { block:'short_grass', chance:0.20, stackMin:1, stackMax:1 },
+      { block:'short_grass', chance:0.20, stackMin:1, stackMax:1, color:null },
     ];
+
+    // Preset colors offered in the swatch picker ("choose from a few").
+    const SWATCHES = [
+      0x5fa63a, 0x2f8f3a, 0x8a9a3a, 0xe6d21f, 0xe07b1e, 0xd7352a,
+      0xc43a3a, 0xe39ec8, 0xa562d6, 0x5f7fd6, 0x2ea6d6, 0xe8ecef,
+      0x9b7355, 0x8a6d3b, 0x2f8a7a, 0x4c4c50,
+    ];
+    const hexOf = n => '#' + (n >>> 0).toString(16).padStart(6, '0').slice(-6);
+    // Effective color of a decorator: manual override, else its block's color.
+    const decorColor = d => (d.color != null ? d.color : (DECOR_BLOCKS[d.block]?.color ?? 0x5fa63a));
+
+    // Per-column placement is first-passing-wins, so a decorator's real coverage is
+    // its chance times the chance that every earlier decorator missed. Returns
+    // [{ color, share }] plus the leftover bare-ground share.
+    function decorShares() {
+      let remain = 1;
+      const segs = decorators.map(d => {
+        const s = remain * Math.max(0, Math.min(1, d.chance));
+        remain -= s;
+        return { color: decorColor(d), share: s };
+      });
+      return { segs, ground: Math.max(0, remain) };
+    }
+    function renderDecorBar() {
+      const bar = document.getElementById('decorBar');
+      bar.innerHTML = '';
+      const { segs, ground } = decorShares();
+      segs.forEach((s, i) => {
+        if (s.share <= 0) return;
+        const el = document.createElement('div');
+        el.className = 'seg';
+        el.style.flex = s.share + ' 0 0';
+        el.style.background = hexOf(s.color);
+        el.title = `${decorators[i].block || '?'} · ${(s.share * 100).toFixed(1)}%`;
+        bar.appendChild(el);
+      });
+      const g = document.createElement('div');
+      g.className = 'seg ground'; g.style.flex = ground + ' 0 0';
+      g.title = `빈 땅 · ${(ground * 100).toFixed(1)}%`;
+      bar.appendChild(g);
+    }
+
+    // Shared preset-color popover (body-level so the panel's overflow can't clip it).
+    const swatchPop = document.createElement('div');
+    swatchPop.className = 'swatch-pop'; swatchPop.hidden = true;
+    document.body.appendChild(swatchPop);
+    function openSwatchPicker(anchor, d) {
+      swatchPop.innerHTML = '';
+      SWATCHES.forEach(c => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.style.background = hexOf(c); b.title = hexOf(c);
+        b.addEventListener('click', () => { d.color = c; swatchPop.hidden = true; renderDecorators(); rebuild(); });
+        swatchPop.appendChild(b);
+      });
+      const auto = document.createElement('button');
+      auto.type = 'button'; auto.className = 'auto'; auto.textContent = '자동 (블록 색)';
+      auto.addEventListener('click', () => { d.color = null; swatchPop.hidden = true; renderDecorators(); rebuild(); });
+      swatchPop.appendChild(auto);
+      swatchPop.hidden = false;
+      const r = anchor.getBoundingClientRect();
+      swatchPop.style.left = Math.max(8, Math.min(r.left, window.innerWidth - swatchPop.offsetWidth - 8)) + 'px';
+      swatchPop.style.top = Math.min(r.bottom + 6, window.innerHeight - swatchPop.offsetHeight - 8) + 'px';
+    }
+    document.addEventListener('click', (e) => {   // click outside closes the picker
+      if (!swatchPop.hidden && !swatchPop.contains(e.target) && !e.target.classList.contains('swatch'))
+        swatchPop.hidden = true;
+    });
 
     // Render the decorator-editor rows and wire their inputs.
     function renderDecorators(){
@@ -607,6 +696,7 @@
         const row = document.createElement('div');
         row.className = 'decor';
         row.innerHTML =
+          `<button type="button" class="swatch" data-i="${i}" style="background:${hexOf(decorColor(d))}" title="색 선택"></button>` +
           `<input type="text" list="decorBlockList" data-i="${i}" data-k="block" value="${d.block}" placeholder="블록 id" title="블록 id (예: poppy)" />` +
           `<input type="number" data-i="${i}" data-k="chance" min="0" max="1" step="0.01" value="${d.chance}" title="확률 0~1" />` +
           `<input type="number" data-i="${i}" data-k="stackMin" min="1" max="12" value="${d.stackMin}" title="스택 최소" />` +
@@ -614,7 +704,7 @@
           `<button type="button" class="layer-del" data-i="${i}" title="삭제">×</button>`;
         list.appendChild(row);
       });
-      list.querySelectorAll('select, input').forEach(el => el.addEventListener('change', () => {
+      list.querySelectorAll('input').forEach(el => el.addEventListener('change', () => {
         const i = +el.dataset.i, k = el.dataset.k;
         if (k === 'block') decorators[i].block = el.value.trim();
         else if (k === 'chance') decorators[i].chance = Math.max(0, Math.min(1, parseFloat(el.value) || 0));
@@ -626,11 +716,16 @@
             renderDecorators();
           }
         }
+        renderDecorBar();   // chance change shifts occupancy
         rebuild();
+      }));
+      list.querySelectorAll('.swatch').forEach(b => b.addEventListener('click', (e) => {
+        e.stopPropagation(); openSwatchPicker(b, decorators[+b.dataset.i]);
       }));
       list.querySelectorAll('.layer-del').forEach(b => b.addEventListener('click', () => {
         decorators.splice(+b.dataset.i, 1); renderDecorators(); rebuild();
       }));
+      renderDecorBar();
     }
 
     // --- Objects (IrisObjectPlacement): external .iob schematics placed on the
@@ -1037,9 +1132,9 @@
         return y <= at(x, z);
       };
 
-      // Decorator plant colors (cached per block kind).
+      // Decorator plant colors (cached per hex value, since color is per-decorator).
       const plantCache = {};
-      const plantColFor = b => (plantCache[b] ||= new THREE.Color(DECOR_BLOCKS[b]?.color ?? 0x5fa63a));
+      const plantColForHex = hex => (plantCache[hex] ||= new THREE.Color(hex));
 
       // Place at most one decorator plant on a column's surface. Earlier decorators
       // have priority (first whose per-column chance passes wins).
@@ -1053,7 +1148,7 @@
           const col = !!spec.column;
           const hw = col ? 0.42 : 0.16;              // half width (pillar vs thin plant)
           const ph = col ? stack : 0.85;             // total height in blocks
-          emitBox(x + 0.5, (h + 1) + ph / 2, z + 0.5, hw, ph / 2, hw, plantColFor(d.block), P, N, C);
+          emitBox(x + 0.5, (h + 1) + ph / 2, z + 0.5, hw, ph / 2, hw, plantColForHex(decorColor(d)), P, N, C);
           faceCount += 6;
           return;
         }

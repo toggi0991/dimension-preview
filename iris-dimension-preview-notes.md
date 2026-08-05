@@ -60,6 +60,8 @@
 - [x] **decorators(표면 식생)** — 데코레이터 편집기(블록·확률·스택) + 프리뷰 마커(emitBox) +
       biome export `decorators[]`. 잔디·꽃=얇은 마커, cactus/cane/bamboo=기둥. (2026-07-28)
       블록 자동완성 datalist를 바닐라 60종으로 확장, 블록칸은 자유 text 입력.
+      블록 왼쪽에 색 스와치(프리셋 16색 팝오버, `d.color`, 자동=블록색) + 확률 점유율 가로 바
+      (선착순 모델: share_i=remain·chance_i, 나머지=빈땅). 스와치 색은 바·3D 마커에 공통 반영. (2026-08-02)
 - [x] **objects(스키매틱 배치)** — 오브젝트 편집기(이름 text·확률·밀도) + info 툴팁(이름은 .iob
       확장자 없이, 폴더는 슬래시, 타팩은 pack:object) + export `objects[]{place,chance,density}`.
       실제 .iob는 렌더 불가라 위치 마커(◆ post)만 표시. (2026-07-28)
